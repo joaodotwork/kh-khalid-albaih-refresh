@@ -16,6 +16,7 @@ export default function DonatePage() {
   const [customAmount, setCustomAmount] = useState<string>('');
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const handleOpenModal = () => {
     setShowModal(true);
@@ -48,7 +49,7 @@ export default function DonatePage() {
     setError(null);
   };
   
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validate phone number
     if (phoneNumber.length !== 8) {
       setError('Please enter a valid 8-digit phone number');
@@ -80,15 +81,43 @@ export default function DonatePage() {
       return;
     }
     
-    // Here, you would normally initiate the Vipps payment
-    // For now, we'll just log the values and show an alert
-    console.log('Initiating payment:', {
-      amount: finalAmount,
-      phoneNumber,
-    });
+    // Show loading state
+    setError(null);
+    setIsLoading(true);
     
-    alert(`Payment process would start now for NOK ${finalAmount} to phone number ${phoneNumber}`);
-    handleCloseModal();
+    try {
+      // Call our API endpoint to initiate Vipps payment
+      const response = await fetch('/api/initiate-vipps-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: finalAmount,
+          phoneNumber,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate payment');
+      }
+      
+      // Check if we have a redirect URL from Vipps
+      if (data.redirectUrl) {
+        // Redirect the user to Vipps payment page
+        window.location.href = data.redirectUrl;
+      } else {
+        throw new Error('No redirect URL received from payment service');
+      }
+    } catch (error) {
+      console.error('Payment initiation error:', error);
+      setError(typeof error === 'object' && error !== null && 'message' in error 
+        ? (error as Error).message 
+        : 'Failed to initiate payment. Please try again.');
+      setIsLoading(false);
+    }
   };
   
   return (
@@ -243,12 +272,27 @@ export default function DonatePage() {
                 
                 <button
                   onClick={handleSubmit}
-                  className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all duration-200 hover:shadow-lg flex items-center justify-center"
+                  disabled={isLoading}
+                  className={`w-full py-4 px-4 text-white font-bold rounded-lg shadow-md transition-all duration-200 flex items-center justify-center ${
+                    isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
+                  }`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                  </svg>
-                  Proceed to Payment
+                  {isLoading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      </svg>
+                      Proceed to Payment
+                    </>
+                  )}
                 </button>
               </div>
               

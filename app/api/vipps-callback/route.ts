@@ -1,53 +1,174 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
+import { put } from '@vercel/blob';
 
-// In a real implementation, this would be a database or another persistent storage solution
-const tempStorage: Record<string, { createdAt: Date }> = {};
-
-// Purge old entries (for demo purposes)
-const purgeOldEntries = () => {
-  const now = new Date();
-  Object.keys(tempStorage).forEach(key => {
-    const entry = tempStorage[key];
-    const hoursDiff = (now.getTime() - entry.createdAt.getTime()) / (1000 * 60 * 60);
-    if (hoursDiff > 24) {
-      delete tempStorage[key];
-    }
-  });
-};
-
-export async function POST(request: Request) {
+/**
+ * This endpoint handles callbacks from Vipps regarding payment status
+ * It will be called when a payment is confirmed, or other status changes occur
+ */
+export async function POST(request: NextRequest) {
   try {
-    // Purge old entries
-    purgeOldEntries();
+    // Parse the callback data from Vipps
+    const callbackData = await request.json();
     
-    // Validate request from Vipps
-    const data = await request.json();
+    // In production, validate the webhook signature
+    // This requires a specific implementation based on Vipps documentation
+    // Example: verifyVippsSignature(request.headers, JSON.stringify(callbackData))
     
-    // In production, validate the request has come from Vipps
-    // This would involve checking headers, signatures, etc.
+    console.log('Received callback from Vipps:', callbackData);
     
-    console.log('Received callback from Vipps:', data);
+    // Extract payment information
+    const { 
+      reference,      // The unique reference we generated for this order
+      amount,         // Amount details including currency and value
+      status,         // Payment status: CREATED, AUTHORIZED, CAPTURED, etc.
+      paymentMethod,  // Payment method details
+      metadata,       // Any metadata we sent with the payment
+      userInfo        // User information if consent was given
+    } = callbackData;
     
-    // Generate a unique download ID
-    const downloadId = nanoid();
-    
-    // Store the download ID with metadata
-    // In a real implementation, this would be stored in a database
-    tempStorage[downloadId] = {
-      createdAt: new Date(),
-      // Additional metadata from Vipps callback would be stored here
-    };
-    
-    // Generate the download URL that the user will be redirected to
-    const downloadUrl = new URL(`/download/${downloadId}`, request.url).toString();
-    
-    // Return the URL that Vipps should redirect the user to
-    return NextResponse.json({ 
-      redirectUrl: downloadUrl 
-    });
+    // Check if the payment is successful
+    if (status === 'AUTHORIZED' || status === 'CAPTURED') {
+      // Payment was successful
+      
+      // Generate a unique download ID
+      const downloadId = nanoid();
+      
+      // Extract user information if available
+      const userProfile = userInfo || {};
+      
+      // Create a record of the donation
+      const donationRecord = {
+        reference,
+        amount: amount.value / 100, // Convert from øre to NOK
+        currency: amount.currency,
+        status,
+        timestamp: new Date().toISOString(),
+        userProfile: {
+          name: userProfile.name || null,
+          email: userProfile.email || null,
+          phoneNumber: userProfile.phoneNumber || null
+        },
+        downloadId
+      };
+      
+      // Store donation record in Vercel Blob
+      // In a production environment, this might use a database instead
+      try {
+        // Create a unique filename for this donation record
+        const blobName = `donations/${reference}_${downloadId}.json`;
+        
+        // Store the donation record
+        await put(
+          blobName,
+          JSON.stringify(donationRecord, null, 2),
+          {
+            contentType: 'application/json',
+            access: 'private'
+          }
+        );
+        
+        console.log(`Stored donation record to ${blobName}`);
+        
+        // Update donation index for easy retrieval
+        await updateDonationIndex(donationRecord);
+      } catch (storageError) {
+        console.error('Error storing donation record:', storageError);
+        // Continue processing even if storage fails
+      }
+      
+      // Create a mapping between downloadId and donationRecord
+      // This would be used when the user accesses the download page
+      try {
+        const downloadMapping = {
+          downloadId,
+          reference,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+        };
+        
+        await put(
+          `downloads/${downloadId}.json`,
+          JSON.stringify(downloadMapping, null, 2),
+          {
+            contentType: 'application/json',
+            access: 'private'
+          }
+        );
+      } catch (mappingError) {
+        console.error('Error creating download mapping:', mappingError);
+      }
+      
+      // Return a success response to Vipps (for API to API callbacks)
+      return NextResponse.json({
+        success: true,
+        message: 'Payment processed successfully'
+      });
+    } else {
+      // Payment was not successful or is in another state
+      console.log(`Payment ${reference} is in state: ${status}`);
+      
+      return NextResponse.json({
+        success: false,
+        message: `Payment in state: ${status}`
+      });
+    }
   } catch (error) {
     console.error('Error processing Vipps callback:', error);
-    return NextResponse.json({ error: 'Failed to process callback' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to process callback' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Helper function to update the donation index
+ * This maintains a list of all donations for admin viewing
+ */
+async function updateDonationIndex(donationRecord) {
+  try {
+    // Attempt to get existing index
+    let donationIndex;
+    try {
+      const indexResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/admin/donation-index`,
+        { method: 'GET' }
+      );
+      
+      if (indexResponse.ok) {
+        donationIndex = await indexResponse.json();
+      } else {
+        // Create new index if it doesn't exist
+        donationIndex = { donations: [] };
+      }
+    } catch (error) {
+      // Create new index if error occurs
+      donationIndex = { donations: [] };
+    }
+    
+    // Add minimal donation info to index
+    donationIndex.donations.push({
+      reference: donationRecord.reference,
+      amount: donationRecord.amount,
+      currency: donationRecord.currency,
+      timestamp: donationRecord.timestamp,
+      name: donationRecord.userProfile?.name || null,
+      email: donationRecord.userProfile?.email || null,
+      phoneNumber: donationRecord.userProfile?.phoneNumber || null
+    });
+    
+    // Store updated index
+    await put(
+      'donations/index.json',
+      JSON.stringify(donationIndex, null, 2),
+      {
+        contentType: 'application/json',
+        access: 'private'
+      }
+    );
+  } catch (error) {
+    console.error('Error updating donation index:', error);
+    // Continue even if index update fails
   }
 }
