@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { list, put } from '@vercel/blob';
 import { withValidVippsToken } from '../../lib/vipps-auth';
+import { VIPPS_CAPTURE_URL } from '../../lib/vipps-config';
 
 // Wrap the handler function with the token middleware
 export const POST = (request: NextRequest) => withValidVippsToken(request, handlePost);
@@ -73,7 +74,8 @@ async function handlePost(request: NextRequest) {
     }
     
     // 3. Make the capture API request to Vipps
-    const captureUrl = `https://api.vipps.no/epayment/v1/payments/${reference}/capture`;
+    const captureUrl = VIPPS_CAPTURE_URL(reference);
+    console.log(`Making capture request to: ${captureUrl}`);
     const captureResponse = await fetch(captureUrl, {
       method: 'POST',
       headers: {

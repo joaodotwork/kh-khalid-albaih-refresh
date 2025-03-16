@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withValidVippsToken } from '../lib/vipps-auth';
 import { nanoid } from 'nanoid';
+import { VIPPS_PAYMENT_URL } from '../lib/vipps-config';
 
 // Wrap the handler function with the token middleware
 export const POST = (request: NextRequest) => withValidVippsToken(request, handlePost);
@@ -159,7 +160,8 @@ async function handlePost(request: NextRequest) {
     });
     
     // Make the API request to Vipps ePayment API
-    const vippsResponse = await fetch('https://apitest.vipps.no/epayment/v1/payments', {
+    console.log(`Making payment request to: ${VIPPS_PAYMENT_URL}`);
+    const vippsResponse = await fetch(VIPPS_PAYMENT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { put, list } from '@vercel/blob';
 import { getValidAccessToken } from '../lib/vipps-auth';
+import { VIPPS_CAPTURE_URL } from '../lib/vipps-config';
 
 /**
  * This endpoint handles callbacks from Vipps regarding payment status
@@ -146,7 +147,7 @@ async function capturePayment(reference: string, paymentData: any) {
   const accessToken = await getValidAccessToken();
   
   // 2. Make the capture API request to Vipps
-  const captureUrl = `https://api.vipps.no/epayment/v1/payments/${reference}/capture`;
+  const captureUrl = VIPPS_CAPTURE_URL(reference);
   console.log(`Auto-capturing payment ${reference} at ${captureUrl}`);
   
   const captureResponse = await fetch(captureUrl, {

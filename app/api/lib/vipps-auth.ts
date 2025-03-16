@@ -1,15 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { NextRequest } from 'next/server';
-
-// Determine if we're in test or production environment
-const isTestEnvironment = process.env.NODE_ENV !== 'production' || 
-                         process.env.VIPPS_ENVIRONMENT === 'test';
-
-// Set the correct endpoints based on environment
-const VIPPS_TOKEN_URL = isTestEnvironment 
-  ? 'https://apitest.vipps.no/accesstoken/get'
-  : 'https://api.vipps.no/accesstoken/get';
+import { VIPPS_TOKEN_URL } from './vipps-config';
 
 interface TokenResponse {
   token_type: string;
@@ -48,8 +40,8 @@ export async function getValidAccessToken(): Promise<string> {
   }
   
   try {
-    // Use the correct token URL based on environment
-    console.log(`Using Vipps token URL: ${VIPPS_TOKEN_URL} (${isTestEnvironment ? 'test' : 'production'} environment)`);
+    // Log the token URL we're using
+    console.log(`Using Vipps test environment URL: ${VIPPS_TOKEN_URL}`);
     const tokenUrl = VIPPS_TOKEN_URL;
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     
