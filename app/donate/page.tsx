@@ -5,9 +5,9 @@ import Image from 'next/image';
 
 // Preset donation amount options
 const presetAmounts = [
-  { id: 'small', amount: 50, label: 'NOK 50' },
-  { id: 'medium', amount: 100, label: 'NOK 100' },
-  { id: 'large', amount: 200, label: 'NOK 200' },
+  { id: 'small', amount: 100, label: 'NOK 100' },
+  { id: 'medium', amount: 500, label: 'NOK 500' },
+  { id: 'large', amount: 1000, label: 'NOK 1000' },
 ];
 
 export default function DonatePage() {
@@ -72,10 +72,7 @@ export default function DonatePage() {
         return;
       }
       
-      if (parsedAmount > 1000) {
-        setError('Maximum donation amount is NOK 1000');
-        return;
-      }
+      // No maximum limit for custom donations
       
       finalAmount = parsedAmount;
     } else {
@@ -204,7 +201,7 @@ export default function DonatePage() {
                     />
                   </div>
                   <p className="mt-2 text-xs text-gray-600">
-                    Min: NOK 10, Max: NOK 1000
+                    Min: NOK 10, No maximum limit
                   </p>
                 </div>
                 
