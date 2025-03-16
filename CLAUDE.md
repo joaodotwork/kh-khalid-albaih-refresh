@@ -11,6 +11,7 @@
 - **Set up tunneling for local Vipps testing**: `node scripts/setup-tunnel.js`
 - **Refresh Vipps token**: `node scripts/refresh-vipps-token.js --update`
 - **Upload sample artwork file**: `node scripts/upload-sample-artwork.js`
+- **Create test data for downloads**: `node scripts/create-test-data.js [downloadId]`
 
 ## Project Structure
 
@@ -103,6 +104,15 @@ Testing the Vipps integration locally requires a public URL for callbacks. We us
 2. The script will start ngrok and update your `.env` with the correct `NEXT_PUBLIC_BASE_URL`
 3. Restart your Next.js dev server to pick up the new URL
 4. Test the complete payment flow
+
+### Testing the Download Flow
+
+To test the download functionality without completing a real payment:
+
+1. Generate a sample artwork file: `node scripts/upload-sample-artwork.js`
+2. Create test data for a fake donation: `node scripts/create-test-data.js`
+3. The script will output a URL to visit in your browser
+4. Go to the download page and test the "Download Your Artwork" button
 
 For authentication issues:
 1. Make sure you have a valid access token: `node scripts/refresh-vipps-token.js --update`
