@@ -12,7 +12,7 @@
 ## Project Structure
 
 ```
-kh-khalid-albair/
+kh-khalid-albaih/
 ├── app/                      # Next.js app directory
 │   ├── api/                  # API routes
 │   │   ├── download/[id]/    # Download API endpoint

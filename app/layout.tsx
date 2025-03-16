@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'KH Khalid Albair',
+  title: 'KH Khalid Albaih',
   description: 'Scan the QR code to access your unique download',
 };
 

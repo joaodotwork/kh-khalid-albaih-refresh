@@ -1,8 +1,29 @@
-# KH Khalid Albair
+# KH Khalid Albaih
 
 A responsive landing page that displays a static QR code generated using the Vipps QR API. When scanned, the QR code redirects users to a unique download link, allowing secure access to digital assets with protection against link sharing.
 
-## Flow Diagram
+## User Journey Diagram
+
+```mermaid
+journey
+    title User Experience Flow
+    section Landing Page
+        Visit landing page: 5: User
+        See static QR code: 5: User
+        Scan QR with Vipps app: 4: User
+    section Behind the Scenes
+        Process QR scan: 5: Vipps API
+        Generate unique ID: 5: Vipps API
+        Callback to our server: 5: Server
+        Create download URL: 5: Server
+    section Download Process
+        Redirect to download page: 4: User
+        Authenticate download: 5: Server
+        Download digital asset: 5: User
+        Access expires: 5: Server
+```
+
+## Technical Flow Diagram
 
 ```mermaid
 flowchart TD
@@ -41,7 +62,7 @@ flowchart TD
 1. Clone the repository
    ```bash
    git clone <repository-url>
-   cd kh-khalid-albair
+   cd kh-khalid-albaih
    ```
 
 2. Install dependencies

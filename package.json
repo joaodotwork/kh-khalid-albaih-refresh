@@ -1,7 +1,7 @@
 {
-  "name": "kh-khalid-albair",
+  "name": "kh-khalid-albaih",
   "version": "1.0.0",
-  "description": "A responsive landing page that displays a static QR code generated using the Vipps QR API. When scanned, the QR code redirects users to a unique download link, allowing secure access to digital assets with protection against link sharing.",
+  "description": "A responsive landing page for Khalid Albaih that displays a static QR code generated using the Vipps QR API. When scanned, the QR code redirects users to a unique download link, allowing secure access to digital assets with protection against link sharing.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,10 +9,16 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["vipps", "qr-code", "download", "next.js"],
+  "keywords": [
+    "vipps",
+    "qr-code",
+    "download",
+    "next.js"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@tailwindcss/postcss": "^4.0.14",
     "@vercel/blob": "^0.27.3",
     "nanoid": "^5.1.4",
     "next": "^15.2.2",
