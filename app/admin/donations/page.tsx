@@ -30,19 +30,31 @@ export default function AdminDonationsPage() {
   async function fetchDonations() {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/donations');
+      console.log('Fetching donations from API...');
+      
+      // Add timestamp to avoid caching
+      const response = await fetch(`/api/admin/donations?t=${Date.now()}`);
+      console.log('API response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`Error fetching donations: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
+      console.log('Donation data received:', data);
+      
+      if (!data.donations || !Array.isArray(data.donations)) {
+        console.warn('Unexpected data format, expected {donations: Array}', data);
+        setDonations([]);
+        return;
+      }
       
       // Sort donations by timestamp (newest first)
       const sortedDonations = data.donations.sort((a: Donation, b: Donation) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
       
+      console.log('Sorted donations:', sortedDonations);
       setDonations(sortedDonations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
