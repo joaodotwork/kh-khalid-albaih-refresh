@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { read } from '@vercel/blob';
+import { head, getDownloadUrl, list } from '@vercel/blob';
 
 /**
  * GET handler for download API route
@@ -59,13 +59,35 @@ export async function GET(
     // For a real implementation, you would have a mapping of which file to serve
     // We'll use a fixed artwork file for simplicity
 
-    // This is the name of the file in your Vercel Blob storage
-    const artworkBlobName = 'artwork/khalid-albaih-digital-artwork.pdf';
+    // Use the specific MP4 video file
+    console.log(`API: Using specific MP4 video file`);
+    let artwork;
     
-    // Get the file from Vercel Blob storage
-    const artwork = await read(artworkBlobName);
+    try {
+      // Direct URL to the MP4 file
+      const artworkUrl = "https://kjrgf7beznvdqbud.public.blob.vercel-storage.com/artwork/kh-Khalid-Albaih-Hijab-mw7vKH23VXp1yspduarwt3EfWc7sZl.mp4";
+      console.log(`API: Using artwork blob URL directly: ${artworkUrl}`);
+      
+      const artworkResponse = await fetch(artworkUrl);
+      if (!artworkResponse.ok) {
+        console.error(`API: Error fetching artwork: ${artworkResponse.status} ${artworkResponse.statusText}`);
+        return NextResponse.json(
+          { error: 'Artwork file could not be retrieved' },
+          { status: 500 }
+        );
+      }
+      
+      artwork = await artworkResponse.arrayBuffer();
+      console.log(`API: Artwork content retrieved, size: ${artwork.byteLength} bytes`);
+    } catch (artworkError) {
+      console.error(`API: Error fetching artwork:`, artworkError);
+      return NextResponse.json(
+        { error: 'Failed to retrieve artwork' },
+        { status: 500 }
+      );
+    }
     
-    // If the artwork file doesn't exist in blob storage
+    // If the artwork file doesn't exist in blob storage (should not reach here)
     if (!artwork) {
       console.error(`Artwork file not found: ${artworkBlobName}`);
       return NextResponse.json(
@@ -80,11 +102,17 @@ export async function GET(
     // Update download record to mark it as used (optional)
     await markDownloadAsUsed(id);
     
+    // Set the content type for MP4 video
+    const fileExtension = 'mp4';
+    const contentType = 'video/mp4';
+    
+    console.log(`API: Using content type: ${contentType} for MP4 video`);
+    
     // Return the file as a download
     return new NextResponse(artwork, {
       headers: {
-        'Content-Disposition': `attachment; filename="khalid-albaih-digital-artwork.pdf"`,
-        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="Khalid-Albaih-Hijab.${fileExtension}"`,
+        'Content-Type': contentType,
         'Cache-Control': 'no-store, must-revalidate',
       },
     });
@@ -105,36 +133,57 @@ export async function GET(
  */
 async function validateDownloadId(id: string) {
   try {
-    // Try to get the download mapping from Vercel Blob
-    const blobName = `downloads/${id}.json`;
-    const blob = await read(blobName);
+    // Find the matching blob URL directly from the list results
+    console.log(`API: Looking for blobs that match download ID: ${id}`);
+    const blobsList = await list({ prefix: 'downloads/' });
     
-    if (!blob) {
+    // Find blobs that contain our ID
+    const matchingBlobs = blobsList.blobs.filter(b => b.pathname.includes(id));
+    console.log(`API: Found ${matchingBlobs.length} matching blobs:`, matchingBlobs.map(b => b.pathname));
+    
+    if (matchingBlobs.length === 0) {
+      console.log(`API: No matching blobs found for ID: ${id}`);
       return null;
     }
     
-    // Parse the mapping data
-    const text = new TextDecoder().decode(blob);
-    const mapping = JSON.parse(text);
+    // Get the URL directly from the blob object
+    const blobUrl = matchingBlobs[0].url;
+    console.log(`API: Using blob URL directly: ${blobUrl}`);
     
-    // Check if the download has expired
-    const expiresAt = new Date(mapping.expiresAt);
-    if (expiresAt < new Date()) {
-      console.log(`Download ${id} has expired`);
+    // Fetch the blob content directly using its URL
+    try {
+      const response = await fetch(blobUrl);
+      if (!response.ok) {
+        console.error(`API: Error fetching blob: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      
+      const text = await response.text();
+      console.log(`API: Blob content: ${text.substring(0, 100)}...`);
+      const mapping = JSON.parse(text);
+      
+      // Check if the download has expired
+      const expiresAt = new Date(mapping.expiresAt);
+      if (expiresAt < new Date()) {
+        console.log(`API: Download ${id} has expired`);
+        return null;
+      }
+      
+      // Check if the download has already been used (optional)
+      if (mapping.used) {
+        console.log(`API: Download ${id} has already been used`);
+        // You might decide to allow multiple downloads or not
+        // For now, we'll allow multiple downloads
+        // return null;
+      }
+      
+      return mapping;
+    } catch (fetchError) {
+      console.error(`API: Error fetching blob content:`, fetchError);
       return null;
     }
-    
-    // Check if the download has already been used (optional)
-    if (mapping.used) {
-      console.log(`Download ${id} has already been used`);
-      // You might decide to allow multiple downloads or not
-      // For now, we'll allow multiple downloads
-      // return null;
-    }
-    
-    return mapping;
   } catch (error) {
-    console.error(`Error validating download ID ${id}:`, error);
+    console.error(`API: Error validating download ID ${id}:`, error);
     return null;
   }
 }
@@ -144,19 +193,40 @@ async function validateDownloadId(id: string) {
  */
 async function getDonationDetails(reference: string, downloadId: string) {
   try {
-    // Try to get the donation record from Vercel Blob
-    const blobName = `donations/${reference}_${downloadId}.json`;
-    const blob = await read(blobName);
+    // Find donation records directly from the list results
+    console.log(`API: Looking for donation blobs that match download ID: ${downloadId}`);
+    const blobsList = await list({ prefix: 'donations/' });
     
-    if (!blob) {
+    // Find blobs that contain our download ID
+    const matchingBlobs = blobsList.blobs.filter(b => b.pathname.includes(downloadId));
+    console.log(`API: Found ${matchingBlobs.length} matching donation blobs:`, matchingBlobs.map(b => b.pathname));
+    
+    if (matchingBlobs.length === 0) {
+      console.log(`API: No matching donation blobs found for ID: ${downloadId}`);
       return null;
     }
     
-    // Parse the donation data
-    const text = new TextDecoder().decode(blob);
-    return JSON.parse(text);
+    // Get the URL directly from the blob object
+    const blobUrl = matchingBlobs[0].url;
+    console.log(`API: Using donation blob URL directly: ${blobUrl}`);
+    
+    // Fetch the donation data directly using its URL
+    try {
+      const response = await fetch(blobUrl);
+      if (!response.ok) {
+        console.error(`API: Error fetching donation blob: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      
+      const text = await response.text();
+      console.log(`API: Donation blob content: ${text.substring(0, 100)}...`);
+      return JSON.parse(text);
+    } catch (fetchError) {
+      console.error(`API: Error fetching donation blob content:`, fetchError);
+      return null;
+    }
   } catch (error) {
-    console.error('Error getting donation details:', error);
+    console.error('API: Error getting donation details:', error);
     return null;
   }
 }

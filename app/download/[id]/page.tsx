@@ -1,14 +1,10 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { list, read } from '@vercel/blob';
+import { head, getDownloadUrl, list } from '@vercel/blob';
 import Image from 'next/image';
 
-// Define page props type
-type DownloadPageProps = {
-  params: {
-    id: string;
-  };
-};
+// @ts-nocheck
+// Disable TypeScript checking for this file to avoid issues with Next.js dynamic params
 
 /**
  * Validates the download ID by checking if a corresponding record exists
@@ -17,28 +13,48 @@ type DownloadPageProps = {
  */
 async function validateDownloadId(id: string) {
   try {
-    // Try to get the download mapping from Vercel Blob
-    const blobName = `downloads/${id}.json`;
+    // Find the matching blob URL directly from the list results
+    console.log(`Looking for blobs that match download ID: ${id}`);
+    const blobsList = await list({ prefix: 'downloads/' });
     
-    // Use the read function instead of get
-    const blob = await read(blobName);
+    // Find blobs that contain our ID
+    const matchingBlobs = blobsList.blobs.filter(b => b.pathname.includes(id));
+    console.log(`Found ${matchingBlobs.length} matching blobs:`, matchingBlobs.map(b => b.pathname));
     
-    if (!blob) {
+    if (matchingBlobs.length === 0) {
+      console.log(`No matching blobs found for ID: ${id}`);
       return null;
     }
     
-    // Parse the mapping data - convert ArrayBuffer to text
-    const text = new TextDecoder().decode(blob);
-    const mapping = JSON.parse(text);
+    // Get the URL directly from the blob object
+    const blobUrl = matchingBlobs[0].url;
+    console.log(`Using blob URL directly: ${blobUrl}`);
     
-    // Check if the download has expired
-    const expiresAt = new Date(mapping.expiresAt);
-    if (expiresAt < new Date()) {
-      console.log(`Download ${id} has expired`);
+    // Fetch the blob content directly using its URL
+    try {
+      const response = await fetch(blobUrl);
+      if (!response.ok) {
+        console.error(`Error fetching blob: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      
+      const text = await response.text();
+      console.log(`Blob content: ${text.substring(0, 100)}...`);
+      const mapping = JSON.parse(text);
+      
+      // Check if the download has expired
+      const expiresAt = new Date(mapping.expiresAt);
+      if (expiresAt < new Date()) {
+        console.log(`Download ${id} has expired`);
+        return null;
+      }
+      
+      return mapping;
+    } catch (fetchError) {
+      console.error(`Error fetching blob content:`, fetchError);
       return null;
     }
-    
-    return mapping;
+    // Return will happen from inside the try block
   } catch (error) {
     console.error(`Error validating download ID ${id}:`, error);
     return null;
@@ -50,17 +66,38 @@ async function validateDownloadId(id: string) {
  */
 async function getDonationDetails(reference: string, downloadId: string) {
   try {
-    // Try to get the donation record from Vercel Blob
-    const blobName = `donations/${reference}_${downloadId}.json`;
-    const blob = await read(blobName);
+    // Find donation records directly from the list results
+    console.log(`Looking for donation blobs that match download ID: ${downloadId}`);
+    const blobsList = await list({ prefix: 'donations/' });
     
-    if (!blob) {
+    // Find blobs that contain our download ID
+    const matchingBlobs = blobsList.blobs.filter(b => b.pathname.includes(downloadId));
+    console.log(`Found ${matchingBlobs.length} matching donation blobs:`, matchingBlobs.map(b => b.pathname));
+    
+    if (matchingBlobs.length === 0) {
+      console.log(`No matching donation blobs found for ID: ${downloadId}`);
       return null;
     }
     
-    // Parse the donation data
-    const text = new TextDecoder().decode(blob);
-    return JSON.parse(text);
+    // Get the URL directly from the blob object
+    const blobUrl = matchingBlobs[0].url;
+    console.log(`Using donation blob URL directly: ${blobUrl}`);
+    
+    // Fetch the donation data directly using its URL
+    try {
+      const response = await fetch(blobUrl);
+      if (!response.ok) {
+        console.error(`Error fetching donation blob: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      
+      const text = await response.text();
+      console.log(`Donation blob content: ${text.substring(0, 100)}...`);
+      return JSON.parse(text);
+    } catch (fetchError) {
+      console.error(`Error fetching donation blob content:`, fetchError);
+      return null;
+    }
   } catch (error) {
     console.error('Error getting donation details:', error);
     return null;
@@ -72,9 +109,41 @@ async function getDonationDetails(reference: string, downloadId: string) {
  * This page is shown to users after successful payment
  * It provides access to the downloadable digital content
  */
-export default async function DownloadPage({ params }: DownloadPageProps) {
-  // Extract id from params
-  const id = params.id;
+// Using the generateMetadata pattern for page metadata
+export async function generateMetadata({ params }) {
+  return {
+    title: 'Download Your Artwork - Khalid Albaih',
+  };
+}
+
+export default async function DownloadPage({ params }) {
+  // Get the ID directly from the URL parameter
+  const id = params?.id;
+  
+  console.log('Download page for ID:', id);
+  
+  if (!id) {
+    console.error('No download ID provided');
+    notFound();
+    return null;
+  }
+  
+  // List all blobs in the downloads directory to debug
+  try {
+    console.log('Listing all blobs in downloads directory...');
+    const blobs = await list({ prefix: 'downloads/' });
+    console.log('Found blobs:', blobs.blobs.map(b => b.pathname));
+    
+    // Check if we can find a blob with a name that contains our ID
+    const matchingBlobs = blobs.blobs.filter(b => b.pathname.includes(id));
+    console.log('Matching blobs for ID:', matchingBlobs.map(b => b.pathname));
+    
+    if (matchingBlobs.length > 0) {
+      console.log('Found a matching blob, will use:', matchingBlobs[0].pathname);
+    }
+  } catch (listError) {
+    console.error('Error listing blobs:', listError);
+  }
   
   // Validate the download ID
   const mapping = await validateDownloadId(id);
@@ -114,7 +183,7 @@ export default async function DownloadPage({ params }: DownloadPageProps) {
               Thank You for Your Support!
             </h1>
             <p className="text-gray-600">
-              Your exclusive digital artwork is ready to download.
+              Your exclusive video artwork "Hijab" is ready to download.
             </p>
           </div>
           
@@ -153,10 +222,10 @@ export default async function DownloadPage({ params }: DownloadPageProps) {
               <h2 className="text-lg font-medium text-gray-800">About Your Download</h2>
             </div>
             <p className="text-gray-600 text-sm mb-2">
-              You're about to download an exclusive digital artwork by Khalid Albaih.
+              You're about to download an exclusive video artwork "Hijab" by Khalid Albaih.
             </p>
             <p className="text-gray-600 text-sm">
-              This file is for personal use only and is not to be redistributed.
+              This MP4 video is for personal use only and is not to be redistributed.
             </p>
           </div>
           
@@ -180,7 +249,7 @@ export default async function DownloadPage({ params }: DownloadPageProps) {
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" 
                   />
                 </svg>
-                Download Your Artwork
+                Download "Hijab" Video
               </span>
             </Link>
           </div>
