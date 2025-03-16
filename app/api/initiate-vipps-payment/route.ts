@@ -84,23 +84,41 @@ export async function POST(request: NextRequest) {
     // Get Vipps API credentials from environment variables
     const subscriptionKey = process.env.VIPPS_SUBSCRIPTION_KEY;
     const accessToken = process.env.VIPPS_ACCESS_TOKEN;
+    const merchantSerialNumber = process.env.VIPPS_MERCHANT_SERIAL_NUMBER;
 
-    if (!subscriptionKey || !accessToken) {
-      console.error('Missing Vipps API credentials');
+    if (!subscriptionKey || !accessToken || !merchantSerialNumber) {
+      console.error('Missing Vipps API credentials:');
+      console.error(`- Subscription Key: ${subscriptionKey ? 'Present' : 'Missing'}`);
+      console.error(`- Access Token: ${accessToken ? 'Present' : 'Missing'}`);
+      console.error(`- MSN: ${merchantSerialNumber ? 'Present' : 'Missing'}`);
+      
       return NextResponse.json(
         { error: 'Payment service configuration error' },
         { status: 500 }
       );
     }
 
-    // Make the API request to Vipps ePayment API v2
+    // Check and format access token correctly with Bearer prefix
+    const formattedToken = accessToken.startsWith('Bearer ') 
+      ? accessToken 
+      : `Bearer ${accessToken}`;
+
+    // Log headers for debugging (remove in production)
+    console.log('Request headers:', {
+      'Content-Type': 'application/json',
+      'Authorization': `${formattedToken.substring(0, 15)}...`, // Log only beginning for security
+      'Ocp-Apim-Subscription-Key': `${subscriptionKey.substring(0, 5)}...`, // Log only beginning for security
+      'Merchant-Serial-Number': merchantSerialNumber,
+    });
+
+    // Make the API request to Vipps ePayment API
     const vippsResponse = await fetch('https://apitest.vipps.no/epayment/v1/payments', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': formattedToken,
         'Ocp-Apim-Subscription-Key': subscriptionKey,
-        'Merchant-Serial-Number': process.env.VIPPS_MERCHANT_SERIAL_NUMBER || '',
+        'Merchant-Serial-Number': merchantSerialNumber,
         'Vipps-System-Name': 'kh-khalid-albaih',
         'Vipps-System-Version': '1.0.0',
         'Vipps-System-Plugin-Name': 'nextjs-app',
@@ -111,10 +129,47 @@ export async function POST(request: NextRequest) {
 
     // Check if the request was successful
     if (!vippsResponse.ok) {
-      const errorData = await vippsResponse.json();
-      console.error('Vipps API error:', errorData);
+      let errorMessage = 'Failed to initiate payment with Vipps';
+      
+      // Log the HTTP status for debugging
+      console.error(`Vipps API error status: ${vippsResponse.status}`);
+      
+      // Log all response headers for debugging
+      console.error('Response headers:', Object.fromEntries([...vippsResponse.headers.entries()]));
+      
+      try {
+        // Try to get detailed error information from the response body
+        const errorData = await vippsResponse.json();
+        console.error('Vipps API error details:', errorData);
+        
+        // If there's a specific error message, use it
+        if (errorData.error) {
+          errorMessage = `Vipps error: ${errorData.error}`;
+        } else if (errorData.message) {
+          errorMessage = `Vipps error: ${errorData.message}`;
+        } else if (errorData.type) {
+          errorMessage = `Vipps error type: ${errorData.type}`;
+        }
+        
+        // Special handling for 401 errors
+        if (vippsResponse.status === 401) {
+          errorMessage = 'Payment authentication failed. Please check API credentials.';
+          console.error('Likely causes: Invalid access token or subscription key');
+        }
+      } catch (parseError) {
+        // The response might not contain JSON
+        console.error('Could not parse error response as JSON:', parseError);
+        try {
+          // Try to get the text response
+          const textResponse = await vippsResponse.text();
+          console.error('Error response text:', textResponse);
+        } catch (textError) {
+          console.error('Could not get error response text');
+        }
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to initiate payment with Vipps' },
+        { error: errorMessage },
         { status: vippsResponse.status }
       );
     }
