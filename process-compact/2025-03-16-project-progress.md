@@ -61,3 +61,46 @@
 4. Configure proper environment variables for production
 5. Remove debug endpoints before production deployment
 6. Finalize production configuration
+
+## Issue Analysis: Download Functionality
+
+After analyzing server logs from Vercel, we identified a key issue with the download functionality. Payments initiated via Vipps were successful (reference ID: 9wa5Xv4A0dD67dIH1a7zd), but users received 404 errors when trying to access the download page. 
+
+### Root Cause
+
+The primary issue was that the Vipps callback endpoint, which is responsible for creating the download mapping in Vercel Blob storage, wasn't being triggered reliably after payment completion. This resulted in:
+
+1. Payment references being created correctly during payment initiation
+2. Users being redirected to the download page with their reference ID
+3. The download page failing to find any matching blob entries for that ID
+
+### Implemented Solutions
+
+1. **Created a Recovery Tool**: `scripts/create-missing-download.js`
+   - Allows manual creation of download mappings for payments that already processed
+   - Creates both the download mapping and a minimal donation record
+   - Outputs a download URL that can be shared with customers
+
+2. **Enhanced Download Page Resilience**:
+   - Added retry mechanism to `validateDownloadId` function
+   - Implemented incremental delay between retry attempts (2 seconds)
+   - Added more detailed logging to help diagnose future issues
+   - Improved error handling with helpful messages for different failure scenarios
+
+3. **Improved Vipps Callback Endpoint**:
+   - Added comprehensive logging throughout the callback flow
+   - Implemented data validation to ensure required fields are present
+   - Added verification step to confirm blobs are properly stored
+   - Introduced small delay before completion to prevent race conditions
+
+4. **Updated Documentation**:
+   - Added troubleshooting section to README.md
+   - Updated CLAUDE.md with new script command
+   - Added detailed comments explaining the issue and solution approach
+
+### Next Steps for Download Functionality
+
+1. Monitor server logs for any remaining callback failures
+2. Consider implementing a webhook verification process for callbacks
+3. Add alert mechanism for failed payment processing
+4. Consider a backup database for critical payment and download records

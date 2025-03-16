@@ -123,6 +123,21 @@ sequenceDiagram
 
 6. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application
 
+## Troubleshooting Downloads
+
+If a payment is completed but the download doesn't work (404 error), you can manually create the download mapping:
+
+1. Identify the order reference from the payment (this is the unique ID generated during payment initiation)
+
+2. Run the create-missing-download script:
+   ```bash
+   node scripts/create-missing-download.js <orderReference>
+   ```
+
+3. The script will output a download URL that you can share with the customer
+
+This situation can occur if the Vipps callback doesn't reach the server or fails to complete. The script creates both the download mapping and a basic donation record to ensure the download works.
+
 ### Deployment
 
 1. Push to the `dev` branch for development environments

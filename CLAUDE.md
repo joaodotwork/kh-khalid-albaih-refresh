@@ -12,6 +12,7 @@
 - **Refresh Vipps token**: `node scripts/refresh-vipps-token.js --update`
 - **Upload sample artwork file**: `node scripts/upload-sample-artwork.js`
 - **Create test data for downloads**: `node scripts/create-test-data.js [downloadId]`
+- **Create missing download mapping**: `node scripts/create-missing-download.js <orderReference> [downloadId]`
 - **Rebuild donation index**: `node scripts/rebuild-donation-index.js`
 
 ## Project Structure

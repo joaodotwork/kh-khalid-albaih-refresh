@@ -8,57 +8,116 @@ import Image from 'next/image';
 
 /**
  * Validates the download ID by checking if a corresponding record exists
+ * With retry mechanism for cases where the blob might be in the process of being created
  * @param id The download ID to validate
  * @returns The download mapping record if valid, null otherwise
  */
 async function validateDownloadId(id: string) {
-  try {
-    // Find the matching blob URL directly from the list results
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000; // 2 seconds
+  
+  // Helper function to delay execution
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  // Helper function to check for matching blobs
+  const findMatchingBlobs = async () => {
     console.log(`Looking for blobs that match download ID: ${id}`);
     const blobsList = await list({ prefix: 'downloads/' });
     
-    // Find blobs that contain our ID
-    const matchingBlobs = blobsList.blobs.filter(b => b.pathname.includes(id));
-    console.log(`Found ${matchingBlobs.length} matching blobs:`, matchingBlobs.map(b => b.pathname));
-    
-    if (matchingBlobs.length === 0) {
-      console.log(`No matching blobs found for ID: ${id}`);
-      return null;
+    // Try exact match first (most precise)
+    const exactMatches = blobsList.blobs.filter(b => b.pathname === `downloads/${id}.json`);
+    if (exactMatches.length > 0) {
+      console.log(`Found exact match for ID: ${id}`);
+      return exactMatches;
     }
     
-    // Get the URL directly from the blob object
-    const blobUrl = matchingBlobs[0].url;
-    console.log(`Using blob URL directly: ${blobUrl}`);
-    
-    // Fetch the blob content directly using its URL
+    // Then try partial match
+    const partialMatches = blobsList.blobs.filter(b => b.pathname.includes(id));
+    console.log(`Found ${partialMatches.length} partial matching blobs:`, partialMatches.map(b => b.pathname));
+    return partialMatches;
+  };
+  
+  // Attempt validation with retries
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(blobUrl);
-      if (!response.ok) {
-        console.error(`Error fetching blob: ${response.status} ${response.statusText}`);
+      console.log(`Download ID validation attempt ${attempt + 1}/${MAX_RETRIES}`);
+      
+      // Find matching blobs
+      const matchingBlobs = await findMatchingBlobs();
+      
+      if (matchingBlobs.length === 0) {
+        console.log(`No matching blobs found for ID: ${id} on attempt ${attempt + 1}`);
+        
+        // If we still have retries left, wait and try again
+        if (attempt < MAX_RETRIES - 1) {
+          console.log(`Waiting ${RETRY_DELAY}ms before next attempt...`);
+          await delay(RETRY_DELAY);
+          continue;
+        }
+        
+        // No more retries, return null
         return null;
       }
       
-      const text = await response.text();
-      console.log(`Blob content: ${text.substring(0, 100)}...`);
-      const mapping = JSON.parse(text);
+      // Get the URL directly from the blob object
+      const blobUrl = matchingBlobs[0].url;
+      console.log(`Using blob URL directly: ${blobUrl}`);
       
-      // Check if the download has expired
-      const expiresAt = new Date(mapping.expiresAt);
-      if (expiresAt < new Date()) {
-        console.log(`Download ${id} has expired`);
+      // Fetch the blob content directly using its URL
+      try {
+        const response = await fetch(blobUrl, { cache: 'no-store' }); // Ensure we don't get cached results
+        if (!response.ok) {
+          console.error(`Error fetching blob: ${response.status} ${response.statusText}`);
+          
+          // If we still have retries left, wait and try again
+          if (attempt < MAX_RETRIES - 1) {
+            await delay(RETRY_DELAY);
+            continue;
+          }
+          
+          return null;
+        }
+        
+        const text = await response.text();
+        console.log(`Blob content: ${text.substring(0, 100)}...`);
+        const mapping = JSON.parse(text);
+        
+        // Check if the download has expired
+        const expiresAt = new Date(mapping.expiresAt);
+        if (expiresAt < new Date()) {
+          console.log(`Download ${id} has expired`);
+          return null;
+        }
+        
+        // Success! Return the mapping
+        return mapping;
+      } catch (fetchError) {
+        console.error(`Error fetching blob content:`, fetchError);
+        
+        // If we still have retries left, wait and try again
+        if (attempt < MAX_RETRIES - 1) {
+          await delay(RETRY_DELAY);
+          continue;
+        }
+        
         return null;
       }
+    } catch (error) {
+      console.error(`Error validating download ID ${id} on attempt ${attempt + 1}:`, error);
       
-      return mapping;
-    } catch (fetchError) {
-      console.error(`Error fetching blob content:`, fetchError);
+      // If we still have retries left, wait and try again
+      if (attempt < MAX_RETRIES - 1) {
+        await delay(RETRY_DELAY);
+        continue;
+      }
+      
       return null;
     }
-    // Return will happen from inside the try block
-  } catch (error) {
-    console.error(`Error validating download ID ${id}:`, error);
-    return null;
   }
+  
+  // If we get here, all retries failed
+  console.error(`All validation attempts failed for download ID: ${id}`);
+  return null;
 }
 
 /**
