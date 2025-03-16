@@ -132,14 +132,36 @@ export default async function DownloadPage({ params }) {
   try {
     console.log('Listing all blobs in downloads directory...');
     const blobs = await list({ prefix: 'downloads/' });
-    console.log('Found blobs:', blobs.blobs.map(b => b.pathname));
+    
+    // Adding more detailed logging
+    if (blobs.blobs.length === 0) {
+      console.log('No download blobs found at all');
+    } else {
+      // Log all found blobs
+      console.log('All found blobs:');
+      blobs.blobs.forEach(blob => {
+        console.log(`- ${blob.pathname} (${blob.uploadedAt}): ${blob.url}`);
+      });
+    }
     
     // Check if we can find a blob with a name that contains our ID
     const matchingBlobs = blobs.blobs.filter(b => b.pathname.includes(id));
-    console.log('Matching blobs for ID:', matchingBlobs.map(b => b.pathname));
     
-    if (matchingBlobs.length > 0) {
-      console.log('Found a matching blob, will use:', matchingBlobs[0].pathname);
+    if (matchingBlobs.length === 0) {
+      console.log(`No matching blobs found for ID '${id}'`);
+      
+      // Search for partial matches to help with debugging
+      const partialMatches = blobs.blobs.filter(b => 
+        id.length > 4 && b.pathname.includes(id.substring(0, 4))
+      );
+      
+      if (partialMatches.length > 0) {
+        console.log(`Found ${partialMatches.length} partial matches with first 4 chars:`, 
+          partialMatches.map(b => b.pathname));
+      }
+    } else {
+      console.log(`Found ${matchingBlobs.length} matching blobs:`, 
+        matchingBlobs.map(b => ({ path: b.pathname, url: b.url })));
     }
   } catch (listError) {
     console.error('Error listing blobs:', listError);

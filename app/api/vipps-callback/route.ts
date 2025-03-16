@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
         };
         
-        await put(
+        console.log(`Creating download mapping for ID: ${downloadId}`);
+        const downloadBlob = await put(
           `downloads/${downloadId}.json`,
           JSON.stringify(downloadMapping, null, 2),
           {
@@ -110,14 +111,23 @@ export async function POST(request: NextRequest) {
             access: 'public'
           }
         );
+        console.log(`Download mapping created successfully at: ${downloadBlob.url}`);
       } catch (mappingError) {
         console.error('Error creating download mapping:', mappingError);
       }
       
+      // Prepare the base URL for the download
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+      const downloadUrl = `${baseUrl}/download/${downloadId}`;
+      
+      console.log(`Payment successful, download URL: ${downloadUrl}`);
+      
       // Return a success response to Vipps (for API to API callbacks)
       return NextResponse.json({
         success: true,
-        message: 'Payment processed successfully'
+        message: 'Payment processed successfully',
+        downloadId: downloadId,
+        downloadUrl: downloadUrl
       });
     } else {
       // Payment was not successful or is in another state
