@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { get } from '@vercel/blob';
+import { list, read } from '@vercel/blob';
 import Image from 'next/image';
 
 // Define page props type
@@ -19,14 +19,17 @@ async function validateDownloadId(id: string) {
   try {
     // Try to get the download mapping from Vercel Blob
     const blobName = `downloads/${id}.json`;
-    const blob = await get(blobName);
+    
+    // Use the read function instead of get
+    const blob = await read(blobName);
     
     if (!blob) {
       return null;
     }
     
-    // Parse the mapping data
-    const mapping = JSON.parse(await blob.text());
+    // Parse the mapping data - convert ArrayBuffer to text
+    const text = new TextDecoder().decode(blob);
+    const mapping = JSON.parse(text);
     
     // Check if the download has expired
     const expiresAt = new Date(mapping.expiresAt);
@@ -49,14 +52,15 @@ async function getDonationDetails(reference: string, downloadId: string) {
   try {
     // Try to get the donation record from Vercel Blob
     const blobName = `donations/${reference}_${downloadId}.json`;
-    const blob = await get(blobName);
+    const blob = await read(blobName);
     
     if (!blob) {
       return null;
     }
     
     // Parse the donation data
-    return JSON.parse(await blob.text());
+    const text = new TextDecoder().decode(blob);
+    return JSON.parse(text);
   } catch (error) {
     console.error('Error getting donation details:', error);
     return null;

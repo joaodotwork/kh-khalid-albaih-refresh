@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { get } from '@vercel/blob';
+import { read } from '@vercel/blob';
 
 /**
  * GET handler for download API route
@@ -63,7 +63,7 @@ export async function GET(
     const artworkBlobName = 'artwork/khalid-albaih-digital-artwork.pdf';
     
     // Get the file from Vercel Blob storage
-    const artwork = await get(artworkBlobName);
+    const artwork = await read(artworkBlobName);
     
     // If the artwork file doesn't exist in blob storage
     if (!artwork) {
@@ -81,7 +81,7 @@ export async function GET(
     await markDownloadAsUsed(id);
     
     // Return the file as a download
-    return new NextResponse(artwork.stream(), {
+    return new NextResponse(artwork, {
       headers: {
         'Content-Disposition': `attachment; filename="khalid-albaih-digital-artwork.pdf"`,
         'Content-Type': 'application/pdf',
@@ -107,14 +107,15 @@ async function validateDownloadId(id: string) {
   try {
     // Try to get the download mapping from Vercel Blob
     const blobName = `downloads/${id}.json`;
-    const blob = await get(blobName);
+    const blob = await read(blobName);
     
     if (!blob) {
       return null;
     }
     
     // Parse the mapping data
-    const mapping = JSON.parse(await blob.text());
+    const text = new TextDecoder().decode(blob);
+    const mapping = JSON.parse(text);
     
     // Check if the download has expired
     const expiresAt = new Date(mapping.expiresAt);
@@ -145,14 +146,15 @@ async function getDonationDetails(reference: string, downloadId: string) {
   try {
     // Try to get the donation record from Vercel Blob
     const blobName = `donations/${reference}_${downloadId}.json`;
-    const blob = await get(blobName);
+    const blob = await read(blobName);
     
     if (!blob) {
       return null;
     }
     
     // Parse the donation data
-    return JSON.parse(await blob.text());
+    const text = new TextDecoder().decode(blob);
+    return JSON.parse(text);
   } catch (error) {
     console.error('Error getting donation details:', error);
     return null;
