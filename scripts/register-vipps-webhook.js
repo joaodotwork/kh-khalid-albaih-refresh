@@ -35,11 +35,17 @@ if (!VIPPS_SUBSCRIPTION_KEY || !VIPPS_MERCHANT_SERIAL_NUMBER || !VIPPS_ACCESS_TO
   process.exit(1);
 }
 
-// Determine if we're in test or production mode based on the subscription key
-// This is a best guess - you may need to adjust this logic for your specific keys
-const isTestMode = VIPPS_SUBSCRIPTION_KEY.startsWith('test') || 
+// Forced to test mode for now - change this to false for production
+const forceTestMode = true;
+
+// Determine if we're in test or production mode
+// By default assume test mode unless explicitly set to production
+const isTestMode = forceTestMode || 
+                  !process.env.VIPPS_ENVIRONMENT || 
+                  process.env.VIPPS_ENVIRONMENT === 'test' ||
                   BASE_URL.includes('vercel.app') || 
-                  BASE_URL.includes('localhost');
+                  BASE_URL.includes('localhost') ||
+                  BASE_URL.includes('ngrok');
 
 // Set the API endpoint based on environment
 const API_ENDPOINT = isTestMode
@@ -66,12 +72,24 @@ async function registerWebhook() {
   console.log(`📌 Callback URL: ${WEBHOOK_URL}`);
   console.log(`📌 Environment: ${isTestMode ? 'TEST' : 'PRODUCTION'}`);
   console.log(`📌 Events: ${PAYMENT_EVENTS.join(', ')}`);
+  console.log(`📌 API Endpoint: ${API_ENDPOINT}`);
+  
+  // Debug info
+  console.log('\n📋 Configuration:');
+  console.log(`- Subscription Key: ${VIPPS_SUBSCRIPTION_KEY.substring(0, 5)}...`);
+  console.log(`- Merchant Serial Number: ${VIPPS_MERCHANT_SERIAL_NUMBER}`);
+  const tokenPreview = VIPPS_ACCESS_TOKEN.length > 15 ? 
+    `${VIPPS_ACCESS_TOKEN.substring(0, 15)}...` : 
+    'Invalid Token';
+  console.log(`- Access Token: ${tokenPreview}`);
+  console.log(`- Base URL: ${BASE_URL}`);
 
   try {
     // Format the access token correctly (ensure it has Bearer prefix)
     let formattedToken = VIPPS_ACCESS_TOKEN.trim();
     if (!formattedToken.startsWith('Bearer ')) {
       formattedToken = `Bearer ${formattedToken}`;
+      console.log('Added "Bearer " prefix to token');
     }
 
     // Create the request payload
@@ -80,24 +98,37 @@ async function registerWebhook() {
       events: PAYMENT_EVENTS
     };
 
+    // Configure headers
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': formattedToken,
+      'Ocp-Apim-Subscription-Key': VIPPS_SUBSCRIPTION_KEY,
+      'Merchant-Serial-Number': VIPPS_MERCHANT_SERIAL_NUMBER,
+      'Vipps-System-Name': 'kh-khalid-albaih',
+      'Vipps-System-Version': '1.0.0',
+      'Vipps-System-Plugin-Name': 'nextjs-app',
+      'Vipps-System-Plugin-Version': '1.0.0'
+    };
+    
+    console.log('\n📤 Sending request to Vipps...');
+    
     // Make the API request
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': formattedToken,
-        'Ocp-Apim-Subscription-Key': VIPPS_SUBSCRIPTION_KEY,
-        'Merchant-Serial-Number': VIPPS_MERCHANT_SERIAL_NUMBER,
-        'Vipps-System-Name': 'kh-khalid-albaih',
-        'Vipps-System-Version': '1.0.0',
-        'Vipps-System-Plugin-Name': 'nextjs-app',
-        'Vipps-System-Plugin-Version': '1.0.0'
-      },
+      headers: headers,
       body: JSON.stringify(payload)
     });
 
-    // Parse the response
-    const data = await response.json();
+    // Try to parse the response as JSON
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      // If parsing fails, try to get text content
+      const textContent = await response.text();
+      console.error('❌ Failed to parse response as JSON. Raw response:', textContent);
+      data = { error: 'Failed to parse response' };
+    }
 
     // Check if the request was successful
     if (response.ok) {
@@ -114,9 +145,17 @@ async function registerWebhook() {
       console.error('❌ Failed to register webhook:');
       console.error('Status:', response.status, response.statusText);
       console.error('Error details:', data);
+      
+      // Provide troubleshooting tips
+      console.log('\n🔍 Troubleshooting tips:');
+      console.log('1. Check that your subscription key is correct for the test environment');
+      console.log('2. Ensure the access token is valid and properly formatted');
+      console.log('3. Verify that your merchant serial number is authorized for the test environment');
+      console.log('4. Make sure your callback URL uses HTTPS and is publicly accessible');
     }
   } catch (error) {
     console.error('❌ Error registering webhook:', error.message);
+    console.error('Full error:', error);
   }
 }
 
@@ -125,26 +164,47 @@ async function registerWebhook() {
  */
 async function listWebhooks() {
   console.log('📋 Listing registered webhooks...');
+  console.log(`📌 Environment: ${isTestMode ? 'TEST' : 'PRODUCTION'}`);
+  console.log(`📌 API Endpoint: ${API_ENDPOINT}`);
+  
+  // Debug info
+  console.log('\n📋 Configuration:');
+  console.log(`- Subscription Key: ${VIPPS_SUBSCRIPTION_KEY.substring(0, 5)}...`);
+  console.log(`- Merchant Serial Number: ${VIPPS_MERCHANT_SERIAL_NUMBER}`);
 
   try {
     // Format the access token correctly (ensure it has Bearer prefix)
     let formattedToken = VIPPS_ACCESS_TOKEN.trim();
     if (!formattedToken.startsWith('Bearer ')) {
       formattedToken = `Bearer ${formattedToken}`;
+      console.log('Added "Bearer " prefix to token');
     }
 
+    // Configure headers
+    const headers = {
+      'Authorization': formattedToken,
+      'Ocp-Apim-Subscription-Key': VIPPS_SUBSCRIPTION_KEY,
+      'Merchant-Serial-Number': VIPPS_MERCHANT_SERIAL_NUMBER
+    };
+    
+    console.log('\n📤 Sending request to Vipps...');
+    
     // Make the API request
     const response = await fetch(API_ENDPOINT, {
       method: 'GET',
-      headers: {
-        'Authorization': formattedToken,
-        'Ocp-Apim-Subscription-Key': VIPPS_SUBSCRIPTION_KEY,
-        'Merchant-Serial-Number': VIPPS_MERCHANT_SERIAL_NUMBER
-      }
+      headers: headers
     });
 
-    // Parse the response
-    const data = await response.json();
+    // Try to parse the response as JSON
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      // If parsing fails, try to get text content
+      const textContent = await response.text();
+      console.error('❌ Failed to parse response as JSON. Raw response:', textContent);
+      data = { error: 'Failed to parse response' };
+    }
 
     // Check if the request was successful
     if (response.ok) {
@@ -166,9 +226,16 @@ async function listWebhooks() {
       console.error('❌ Failed to list webhooks:');
       console.error('Status:', response.status, response.statusText);
       console.error('Error details:', data);
+      
+      // Provide troubleshooting tips
+      console.log('\n🔍 Troubleshooting tips:');
+      console.log('1. Check that your subscription key is correct for the test environment');
+      console.log('2. Ensure the access token is valid and properly formatted');
+      console.log('3. Verify that your merchant serial number is authorized for the test environment');
     }
   } catch (error) {
     console.error('❌ Error listing webhooks:', error.message);
+    console.error('Full error:', error);
   }
 }
 
