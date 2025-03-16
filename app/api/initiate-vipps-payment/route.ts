@@ -178,8 +178,8 @@ export async function POST(request: NextRequest) {
       // Log the HTTP status for debugging
       console.error(`Vipps API error status: ${vippsResponse.status}`);
       
-      // Log all response headers for debugging
-      console.error('Response headers:', Object.fromEntries([...vippsResponse.headers.entries()]));
+      // Log response headers for debugging
+      console.error('Response headers:', Array.from(vippsResponse.headers.keys()).map(key => `${key}: ${vippsResponse.headers.get(key)}`));
       
       try {
         // Try to get detailed error information from the response body

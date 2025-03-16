@@ -7,15 +7,15 @@ import { head, getDownloadUrl, list } from '@vercel/blob';
  * 
  * @param {NextRequest} request - The request object
  * @param {Object} context - The route context
- * @param {Object} context.params - The route parameters
- * @param {string} context.params.id - The download ID
  */
 export async function GET(
-  request: NextRequest,
-  context: { params: { id: string } }
+  request: NextRequest
 ) {
+  // Extract the download ID from the URL path
+  const matches = request.nextUrl.pathname.match(/\/api\/download\/([^\/]+)/);
+  const id = matches ? matches[1] : '';
+  
   try {
-    const id = context.params.id;
     
     if (!id) {
       return NextResponse.json(
@@ -89,7 +89,7 @@ export async function GET(
     
     // If the artwork file doesn't exist in blob storage (should not reach here)
     if (!artwork) {
-      console.error(`Artwork file not found: ${artworkBlobName}`);
+      console.error(`Artwork file not found`);
       return NextResponse.json(
         { error: 'Artwork file not found' },
         { status: 404 }

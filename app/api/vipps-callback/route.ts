@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
           JSON.stringify(donationRecord, null, 2),
           {
             contentType: 'application/json',
-            access: 'private'
+            access: 'public'
           }
         );
         
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
           JSON.stringify(downloadMapping, null, 2),
           {
             contentType: 'application/json',
-            access: 'private'
+            access: 'public'
           }
         );
       } catch (mappingError) {
