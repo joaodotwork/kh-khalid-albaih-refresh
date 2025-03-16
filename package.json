@@ -18,6 +18,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+    "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/postcss": "^4.0.14",
     "@vercel/blob": "^0.27.3",
     "dotenv": "^16.4.7",

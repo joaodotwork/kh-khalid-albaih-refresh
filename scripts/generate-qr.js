@@ -28,7 +28,7 @@ if (!accessToken || !subscriptionKey || !merchantSerialNumber) {
 // Set the redirect URL (must be HTTPS according to the API requirements)
 // For testing purposes, we'll use a placeholder HTTPS URL
 // In production, this would be your actual HTTPS domain
-const redirectUrl = 'https://khalid-albaih.vercel.app/download';
+const redirectUrl = 'https://khalid-albaih.vercel.app/donate';
 
 // Request data
 const requestData = JSON.stringify({
