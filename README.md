@@ -23,26 +23,74 @@ journey
         Access link expires after use: 5: System
 ```
 
-## Technical Flow Diagram
+## System Architecture Diagram
 
 ```mermaid
 flowchart TD
-    A[Visitor at exhibition] --> B[Static QR code displayed]
-    B --> C[Visitor scans QR code]
-    C --> D[Vipps QR API processes scan]
-    D --> E[Redirect to donation page]
-    E --> F[Visitor selects donation amount]
-    F --> G[Vipps ePayment initiated]
-    G --> H[Payment processed in Vipps app]
-    H --> I[Generate unique download token with nanoid]
-    I --> J[Redirect to unique download page]
-    J --> K[Visitor downloads asset from Vercel Blob]
-    
-    subgraph "Security Features"
-    L[Each download URL is unique]
-    M[Download links are single-use]
-    N[Assets secured in Vercel Blob Storage]
+    subgraph "Client Side"
+        QR[QR Code Display]
+        UI[Donation UI]
+        DL[Download Page]
     end
+    
+    subgraph "Vipps Payment"
+        VP[Vipps ePayment API]
+        VU[Vipps User App]
+        VW[Vipps Webhooks API]
+    end
+    
+    subgraph "Server Components"
+        API[Next.js API Routes]
+        AUTH[Authentication]
+        PAY[Payment Handler]
+        WH[Webhook Handler]
+        DM[Download Manager]
+    end
+    
+    subgraph "Data Storage"
+        BLOB[Vercel Blob Storage]
+        ADMIN[Admin Dashboard]
+        
+        BLOB_A[Artwork Files]
+        BLOB_D[Download Mappings]
+        BLOB_DON[Donation Records]
+        BLOB_I[Donation Index]
+    end
+    
+    QR -- Scan --> UI
+    UI -- Initiate Payment --> API
+    API -- Create Payment --> VP
+    VP -- Redirect --> VU
+    VU -- Confirm Payment --> VP
+    VP -- Send Event --> VW
+    VW -- Notify Payment --> WH
+    
+    API <--> AUTH
+    API <--> PAY
+    PAY --> WH
+    WH --> DM
+    
+    DM <--> BLOB
+    
+    BLOB -- Store --> BLOB_A
+    BLOB -- Store --> BLOB_D
+    BLOB -- Store --> BLOB_DON
+    BLOB -- Store --> BLOB_I
+    
+    BLOB_D <--> DL
+    BLOB_I <--> ADMIN
+    
+    DL -- Request File --> BLOB_A
+    
+    classDef client fill:#f9f9f9,stroke:#333,stroke-width:1px
+    classDef server fill:#e6f3ff,stroke:#333,stroke-width:1px
+    classDef vipps fill:#f5e6ff,stroke:#333,stroke-width:1px
+    classDef storage fill:#e6ffe6,stroke:#333,stroke-width:1px
+    
+    class QR,UI,DL client
+    class API,AUTH,PAY,WH,DM server
+    class VP,VU,VW vipps
+    class BLOB,ADMIN,BLOB_A,BLOB_D,BLOB_DON,BLOB_I storage
 ```
 
 ## Sequence Diagram
@@ -79,12 +127,14 @@ sequenceDiagram
 - Interactive exhibition experience with QR code display
 - Static QR code generation using Vipps Merchant Redirect API
 - Donation page with customizable contribution amounts
-- Vipps mobile payment integration
-- Secure payment processing and webhooks
-- Unique, single-use download links using nanoid
+- Vipps mobile payment integration with webhook support
+- Support for multiple webhook formats and payment statuses
+- Automatic download mapping for immediate file access
+- Secure payment processing with signature verification
+- Unique, single-use download links with download tracking
 - Secure digital asset delivery via Vercel Blob Storage
-- Download tracking and analytics
 - Mobile-optimized user experience
+- Admin dashboard for donation management
 
 ## Tech Stack
 
@@ -150,9 +200,40 @@ This project uses Vipps Webhooks API for payment notifications. To register webh
    node --experimental-modules scripts/register-vipps-webhook.js list
    ```
 
+### Webhook Event Names
+
+The Vipps Webhooks API uses these event types:
+
+- `epayments.payment.created.v1`: Payment has been created (redirected to Vipps)
+- `epayments.payment.authorized.v1`: Payment has been authorized (user approved)
+- `epayments.payment.captured.v1`: Payment has been captured (funds transferred)
+- `epayments.payment.cancelled.v1`: Payment has been cancelled
+- `epayments.payment.expired.v1`: Payment has expired
+- `epayments.payment.refunded.v1`: Payment has been refunded
+- `epayments.payment.terminated.v1`: Payment has been terminated
+
+Our system handles all of these events, with special handling for `created`, `authorized`, and `captured` statuses to provide a seamless user experience.
+
 ## Troubleshooting Downloads
 
-If a payment is completed but the download doesn't work (404 error), you can manually create the download mapping:
+If a payment is completed but the download doesn't work, there are a few things to check:
+
+### Understanding Download Flows
+
+The system supports two main download flows:
+
+1. **Pre-Download Access (CREATED Status)**:
+   - When a webhook with `CREATED` status arrives, we use the payment reference as the download ID
+   - This enables users to access the download page immediately after initiating payment
+   - Download is available even before payment is fully authorized
+
+2. **Post-Payment Access (AUTHORIZED/CAPTURED Status)**:
+   - For webhooks with `AUTHORIZED` or `CAPTURED` status, we generate a new download ID
+   - These download links are separate from the CREATED status links
+
+### Fixing Missing Downloads
+
+If a download doesn't work (404 error), you can manually create the download mapping:
 
 1. Identify the order reference from the payment (this is the unique ID generated during payment initiation)
 
@@ -163,7 +244,7 @@ If a payment is completed but the download doesn't work (404 error), you can man
 
 3. The script will output a download URL that you can share with the customer
 
-This situation can occur if the Vipps callback doesn't reach the server or fails to complete. The script creates both the download mapping and a basic donation record to ensure the download works.
+This situation can occur if the Vipps webhook doesn't reach the server or fails to complete. The script creates both the download mapping and a basic donation record to ensure the download works.
 
 ### Deployment
 

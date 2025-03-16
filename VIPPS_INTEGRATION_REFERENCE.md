@@ -266,49 +266,123 @@ import { put } from '@vercel/blob';
 import { nanoid } from 'nanoid';
 
 export async function POST(request: Request) {
-  // Verify webhook signature or authentication
-  const webhookData = await request.json();
+  // Parse the webhook data from Vipps
+  const rawText = await request.text();
+  const webhookData = JSON.parse(rawText);
   
-  // Check transaction status
-  if (webhookData.transactionInfo.status === 'RESERVED') {
-    // Payment is reserved/confirmed
+  // Validate webhook signature if available
+  const webhookSecret = process.env.VIPPS_WEBHOOK_SECRET;
+  const signature = request.headers.get('X-Signature');
+  
+  if (webhookSecret && signature) {
+    const isValid = validateSignature(rawText, signature, webhookSecret);
+    if (!isValid) {
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+    }
+  }
+  
+  // Check if this is a standard webhook format or direct format
+  let eventType, reference, status, amount, userInfo;
+  
+  if (webhookData.eventName) {
+    // Standard webhook format
+    eventType = webhookData.eventName;
+    const paymentData = webhookData.data;
+    reference = paymentData.reference || paymentData.orderId;
     
-    // 1. Extract payment data
-    const paymentData = {
-      orderId: webhookData.orderId,
-      amount: webhookData.transactionInfo.amount / 100, // Convert from øre to kroner
-      status: webhookData.transactionInfo.status,
-      timestamp: new Date().toISOString()
+    // Map event type to status
+    switch (eventType) {
+      case 'epayments.payment.created.v1':
+        status = 'CREATED';
+        break;
+      case 'epayments.payment.authorized.v1':
+        status = 'AUTHORIZED';
+        break;
+      case 'epayments.payment.captured.v1':
+        status = 'CAPTURED';
+        break;
+      default:
+        status = 'UNKNOWN';
+    }
+    
+    amount = paymentData.amount;
+    userInfo = paymentData.userInfo;
+  } else if (webhookData.reference) {
+    // Direct webhook format
+    reference = webhookData.reference;
+    status = webhookData.name;
+    eventType = `epayments.payment.${status.toLowerCase()}.v1`;
+    amount = webhookData.amount;
+    userInfo = webhookData.userInfo || null;
+  } else {
+    return NextResponse.json({ error: 'Unrecognized webhook format' }, { status: 400 });
+  }
+  
+  // Process payment based on status
+  if (status === 'CREATED' || status === 'AUTHORIZED' || status === 'CAPTURED') {
+    // If payment is AUTHORIZED, try to auto-capture it
+    if (status === 'AUTHORIZED') {
+      try {
+        await capturePayment(reference, webhookData);
+        status = 'CAPTURED'; // Update status for our records
+      } catch (captureError) {
+        console.error(`Failed to auto-capture payment:`, captureError);
+        // Continue with original status
+      }
+    }
+    
+    // For CREATED status, use the payment reference as the download ID
+    // For other statuses, generate a unique download ID
+    const downloadId = status === 'CREATED' ? reference : nanoid();
+    
+    // Create donation record
+    const donationRecord = {
+      reference,
+      amount: amount.value / 100, // Convert from øre to NOK
+      currency: amount.currency,
+      status,
+      timestamp: new Date().toISOString(),
+      userProfile: {
+        name: userInfo?.name || null,
+        email: userInfo?.email || null,
+        phoneNumber: userInfo?.phoneNumber || null
+      },
+      downloadId
     };
     
-    // 2. Extract consent data if provided
-    const consentData = {
-      email: webhookData.customerInfo?.email || null,
-      firstName: webhookData.customerInfo?.firstName || null,
-      lastName: webhookData.customerInfo?.lastName || null,
-      consentTimestamp: new Date().toISOString()
+    // Store donation record in Vercel Blob
+    const blobName = `donations/${reference}_${downloadId}.json`;
+    await put(blobName, JSON.stringify(donationRecord, null, 2), {
+      contentType: 'application/json',
+      access: 'public'
+    });
+    
+    // Create download mapping
+    const downloadMapping = {
+      downloadId,
+      reference,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
     };
     
-    // 3. Store payment and consent data
-    await storePaymentData(paymentData, consentData);
+    await put(`downloads/${downloadId}.json`, JSON.stringify(downloadMapping, null, 2), {
+      contentType: 'application/json',
+      access: 'public'
+    });
     
-    // 4. Generate unique download ID
-    const downloadId = nanoid();
+    // Update donation index
+    await updateDonationIndex(donationRecord);
     
-    // 5. Store download mapping
-    await storeDownloadMapping(downloadId, webhookData.orderId);
-    
-    // 6. Construct redirect URL for the user
-    const redirectUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/download/${downloadId}`;
-    
-    // 7. Return redirect URL for Vipps to send to the user
-    return NextResponse.json({ redirectUrl });
+    return NextResponse.json({
+      success: true,
+      message: 'Payment processed successfully'
+    });
   } else {
     // Handle failed or cancelled payment
     return NextResponse.json({ 
-      error: 'Payment not completed', 
-      status: webhookData.transactionInfo.status 
-    }, { status: 400 });
+      success: false,
+      message: `Payment in state: ${status}` 
+    });
   }
 }
 ```
