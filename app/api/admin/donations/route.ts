@@ -14,8 +14,16 @@ export async function GET(request: NextRequest) {
     const blobsList = await list({ prefix: 'donations/' });
     console.log('Blob list result:', blobsList.blobs.map(b => b.pathname));
     
-    // Find the index file
-    const indexBlob = blobsList.blobs.find(b => b.pathname === 'donations/index.json');
+    // Find the newest index file
+    const indexBlobs = blobsList.blobs
+      .filter(b => b.pathname === 'donations/index.json')
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    
+    const indexBlob = indexBlobs.length > 0 ? indexBlobs[0] : null;
+    
+    if (indexBlob) {
+      console.log(`Using newest index from ${indexBlob.uploadedAt}`);
+    }
     
     if (!indexBlob) {
       console.log('Donation index not found, returning empty array');
