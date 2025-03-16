@@ -10,6 +10,7 @@
 - **Run type checking**: `npm run typecheck`
 - **Set up tunneling for local Vipps testing**: `node scripts/setup-tunnel.js`
 - **Refresh Vipps token**: `node scripts/refresh-vipps-token.js --update`
+- **Upload sample artwork file**: `node scripts/upload-sample-artwork.js`
 
 ## Project Structure
 
@@ -88,6 +89,11 @@ The token is valid for 24 hours in production and 1 hour in the test environment
 - Used for storing and serving downloadable files
 - Each download gets a unique URL that expires after use
 - Requires `BLOB_READ_WRITE_TOKEN` environment variable
+- Storage structure:
+  - `artwork/khalid-albaih-digital-artwork.pdf` - Digital artwork file
+  - `donations/<reference>_<downloadId>.json` - Donation records
+  - `downloads/<downloadId>.json` - Download mappings
+  - `donations/index.json` - Index of all donations for admin dashboard
 
 ## Local Development with Vipps
 
