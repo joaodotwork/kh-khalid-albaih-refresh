@@ -31,6 +31,19 @@ export async function POST(request: NextRequest) {
     if (status === 'AUTHORIZED' || status === 'CAPTURED') {
       // Payment was successful
       
+      // Auto-capture payment if it's in AUTHORIZED state
+      if (status === 'AUTHORIZED') {
+        try {
+          await capturePayment(reference, callbackData);
+          // Update status to CAPTURED for our records
+          callbackData.status = 'CAPTURED';
+        } catch (captureError) {
+          console.error(`Failed to auto-capture payment ${reference}:`, captureError);
+          // Continue processing with original status
+          // The admin can manually capture it later
+        }
+      }
+      
       // Generate a unique download ID
       const downloadId = nanoid();
       
@@ -123,6 +136,54 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Function to capture a payment in Vipps
+ * @param reference The payment reference to capture
+ * @param paymentData The payment data from Vipps
+ */
+async function capturePayment(reference: string, paymentData: any) {
+  // 1. Get the access token from environment variable
+  const accessToken = process.env.VIPPS_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error('VIPPS_ACCESS_TOKEN is not set');
+  }
+  
+  // 2. Make the capture API request to Vipps
+  const captureUrl = `https://api.vipps.no/epayment/v1/payments/${reference}/capture`;
+  console.log(`Auto-capturing payment ${reference} at ${captureUrl}`);
+  
+  const captureResponse = await fetch(captureUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': accessToken,
+      'Ocp-Apim-Subscription-Key': process.env.VIPPS_SUBSCRIPTION_KEY || '',
+      'Merchant-Serial-Number': process.env.VIPPS_MERCHANT_SERIAL_NUMBER || '',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `auto-capture-${reference}-${Date.now()}`,
+    },
+    body: JSON.stringify({
+      modificationAmount: {
+        currency: paymentData.amount.currency,
+        value: paymentData.amount.value // Already in øre/cents
+      },
+      merchantInformation: {
+        merchantSerialNumber: process.env.VIPPS_MERCHANT_SERIAL_NUMBER || '',
+        callbackPrefix: process.env.NEXT_PUBLIC_BASE_URL || ''
+      }
+    })
+  });
+  
+  if (!captureResponse.ok) {
+    const errorData = await captureResponse.json().catch(() => ({}));
+    throw new Error(`Vipps capture failed: ${captureResponse.status} ${captureResponse.statusText} - ${JSON.stringify(errorData)}`);
+  }
+  
+  const captureResult = await captureResponse.json();
+  console.log(`Successfully auto-captured payment ${reference}:`, captureResult);
+  
+  return captureResult;
+}
+
+/**
  * Helper function to update the donation index
  * This maintains a list of all donations for admin viewing
  */
@@ -153,9 +214,11 @@ async function updateDonationIndex(donationRecord) {
       amount: donationRecord.amount,
       currency: donationRecord.currency,
       timestamp: donationRecord.timestamp,
+      status: donationRecord.status,
       name: donationRecord.userProfile?.name || null,
       email: donationRecord.userProfile?.email || null,
-      phoneNumber: donationRecord.userProfile?.phoneNumber || null
+      phoneNumber: donationRecord.userProfile?.phoneNumber || null,
+      downloadId: donationRecord.downloadId
     });
     
     // Store updated index
@@ -164,7 +227,7 @@ async function updateDonationIndex(donationRecord) {
       JSON.stringify(donationIndex, null, 2),
       {
         contentType: 'application/json',
-        access: 'private'
+        access: 'public'
       }
     );
   } catch (error) {
