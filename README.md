@@ -123,6 +123,33 @@ sequenceDiagram
 
 6. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application
 
+## Vipps Webhooks Integration
+
+This project uses Vipps Webhooks API for payment notifications. To register webhooks with Vipps:
+
+1. Set up your environment variables:
+   ```
+   VIPPS_SUBSCRIPTION_KEY=your_subscription_key
+   VIPPS_MERCHANT_SERIAL_NUMBER=your_msn
+   VIPPS_ACCESS_TOKEN=Bearer your_access_token
+   NEXT_PUBLIC_BASE_URL=https://your-domain.com
+   ```
+
+2. Register your webhook:
+   ```bash
+   node scripts/register-vipps-webhook.js
+   ```
+
+3. Store the webhook secret provided in the response:
+   ```
+   VIPPS_WEBHOOK_SECRET=your_webhook_secret
+   ```
+
+4. To list your registered webhooks:
+   ```bash
+   node scripts/register-vipps-webhook.js list
+   ```
+
 ## Troubleshooting Downloads
 
 If a payment is completed but the download doesn't work (404 error), you can manually create the download mapping:

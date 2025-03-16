@@ -3,11 +3,44 @@ import { nanoid } from 'nanoid';
 import { put, list } from '@vercel/blob';
 import { getValidAccessToken } from '../lib/vipps-auth';
 import { VIPPS_CAPTURE_URL } from '../lib/vipps-config';
+import crypto from 'crypto';
 
 /**
  * This endpoint handles callbacks from Vipps regarding payment status
  * It will be called when a payment is confirmed, or other status changes occur
+ * 
+ * The webhooks API uses a different format than the direct callbacks from the eCom API.
+ * Documentation: https://developer.vippsmobilepay.com/docs/APIs/webhooks-api/
+ * 
+ * Events we handle:
+ * - epayments.payment.created.v1: Payment created
+ * - epayments.payment.authorized.v1: Payment authorized
+ * - epayments.payment.captured.v1: Payment captured 
+ * - epayments.payment.cancelled.v1: Payment cancelled
+ * - epayments.payment.failed.v1: Payment failed
  */
+/**
+ * Validates the webhook signature from Vipps
+ * @param body The raw request body
+ * @param signature The X-Signature header from Vipps
+ * @param secret The webhook secret from Vipps
+ * @returns boolean indicating if the signature is valid
+ */
+function validateSignature(body: string, signature: string, secret: string): boolean {
+  try {
+    // Calculate a HMAC SHA-256 hash of the request body using the webhook secret
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(body);
+    const calculatedSignature = hmac.digest('hex');
+    
+    // Compare the calculated signature with the one from Vipps
+    return calculatedSignature === signature;
+  } catch (error) {
+    console.error('Error validating signature:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Track when this endpoint was called
   const callbackStartTime = new Date().toISOString();
@@ -23,34 +56,142 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the callback data from Vipps
     const rawText = await request.text();
-    let callbackData;
+    let webhookData;
     
     try {
-      callbackData = JSON.parse(rawText);
+      webhookData = JSON.parse(rawText);
+      console.log('Received webhook data:', JSON.stringify(webhookData, null, 2));
     } catch (parseError) {
-      console.error('Error parsing callback data:', parseError);
-      console.error('Raw callback body:', rawText);
+      console.error('Error parsing webhook data:', parseError);
+      console.error('Raw webhook body:', rawText);
       return NextResponse.json(
         { error: 'Invalid JSON payload' },
         { status: 400 }
       );
     }
     
-    // In production, validate the webhook signature
-    // This requires a specific implementation based on Vipps documentation
-    // Example: verifyVippsSignature(request.headers, JSON.stringify(callbackData))
+    // Validate the webhook signature if secret is set
+    const webhookSecret = process.env.VIPPS_WEBHOOK_SECRET;
+    const signature = request.headers.get('X-Signature');
     
-    console.log('Received callback from Vipps:', JSON.stringify(callbackData, null, 2));
+    if (webhookSecret && signature) {
+      console.log('Validating webhook signature');
+      const isValid = validateSignature(rawText, signature, webhookSecret);
+      
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        return NextResponse.json(
+          { error: 'Invalid webhook signature' },
+          { status: 401 }
+        );
+      }
+      console.log('Webhook signature validated successfully');
+    } else {
+      console.warn('Webhook secret or signature missing, skipping signature validation');
+    }
     
-    // Extract payment information
-    const { 
-      reference,      // The unique reference we generated for this order
-      amount,         // Amount details including currency and value
-      status,         // Payment status: CREATED, AUTHORIZED, CAPTURED, etc.
-      paymentMethod,  // Payment method details
-      metadata,       // Any metadata we sent with the payment
-      userInfo        // User information if consent was given
-    } = callbackData;
+    // Extract the event type and payment information from the webhook data
+    const eventType = webhookData.eventName;
+    const eventId = webhookData.eventId;
+    const timestamp = webhookData.timestamp;
+    
+    console.log(`Processing webhook event: ${eventType} (ID: ${eventId})`);
+    
+    // Extract payment information from the webhook data
+    // The structure depends on the event type
+    const paymentData = webhookData.data;
+    
+    if (!paymentData) {
+      console.error('No payment data in webhook');
+      return NextResponse.json(
+        { error: 'No payment data in webhook' },
+        { status: 400 }
+      );
+    }
+    
+    // Extract payment details which can vary by event type
+    // The reference is the order reference we generated
+    const reference = paymentData.reference || paymentData.orderId || '';
+    
+    if (!reference) {
+      console.error('Missing payment reference in webhook data');
+      return NextResponse.json(
+        { error: 'Missing payment reference' },
+        { status: 400 }
+      );
+    }
+    
+    console.log(`Processing payment reference: ${reference}`);
+    
+    // Extract payment status - this depends on the event type
+    let status;
+    let amount;
+    let userInfo;
+    
+    // Map the event type to a payment status
+    switch (eventType) {
+      case 'epayments.payment.created.v1':
+        status = 'CREATED';
+        break;
+      case 'epayments.payment.authorized.v1':
+        status = 'AUTHORIZED';
+        break;
+      case 'epayments.payment.captured.v1':
+        status = 'CAPTURED';
+        break;
+      case 'epayments.payment.cancelled.v1':
+        status = 'CANCELLED';
+        break;
+      case 'epayments.payment.failed.v1':
+        status = 'FAILED';
+        break;
+      default:
+        status = 'UNKNOWN';
+    }
+    
+    // Extract amount information if available
+    // The structure can be different based on the event type
+    if (paymentData.amount) {
+      amount = {
+        value: paymentData.amount.value || 0,
+        currency: paymentData.amount.currency || 'NOK'
+      };
+    } else if (paymentData.transaction && paymentData.transaction.amount) {
+      amount = {
+        value: paymentData.transaction.amount.value || 0,
+        currency: paymentData.transaction.amount.currency || 'NOK'
+      };
+    } else {
+      // Default values if amount is not found
+      amount = {
+        value: 0,
+        currency: 'NOK'
+      };
+    }
+    
+    // Try to extract user information if available
+    // This might be in different places based on event type
+    if (paymentData.userInfo) {
+      userInfo = paymentData.userInfo;
+    } else if (paymentData.user) {
+      userInfo = paymentData.user;
+    } else {
+      userInfo = null;
+    }
+    
+    console.log(`Payment ${reference} is in state: ${status}`);
+    
+    // Create a standardized callback data object that matches our existing code
+    const callbackData = {
+      reference,
+      amount,
+      status,
+      userInfo,
+      eventType,
+      eventId,
+      timestamp,
+      rawData: paymentData  // Store the original data for debugging
+    };
     
     // Verify that we received the necessary data
     if (!reference) {
