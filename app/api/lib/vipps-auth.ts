@@ -2,6 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { NextRequest } from 'next/server';
 
+// Determine if we're in test or production environment
+const isTestEnvironment = process.env.NODE_ENV !== 'production' || 
+                         process.env.VIPPS_ENVIRONMENT === 'test';
+
+// Set the correct endpoints based on environment
+const VIPPS_TOKEN_URL = isTestEnvironment 
+  ? 'https://apitest.vipps.no/accesstoken/get'
+  : 'https://api.vipps.no/accesstoken/get';
+
 interface TokenResponse {
   token_type: string;
   expires_in: number;
@@ -39,21 +48,36 @@ export async function getValidAccessToken(): Promise<string> {
   }
   
   try {
-    // Prepare request to get a new token
-    const tokenUrl = 'https://api.vipps.no/accesstoken/oauth2/token';
+    // Use the correct token URL based on environment
+    console.log(`Using Vipps token URL: ${VIPPS_TOKEN_URL} (${isTestEnvironment ? 'test' : 'production'} environment)`);
+    const tokenUrl = VIPPS_TOKEN_URL;
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    
     const response = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'client_id': clientId,
         'client_secret': clientSecret,
         'Ocp-Apim-Subscription-Key': subscriptionKey,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
+        'Authorization': `Basic ${credentials}`,
+      }
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
+      // Try to get detailed error information
+      let errorDetail = '';
+      try {
+        const errorData = await response.json();
+        errorDetail = JSON.stringify(errorData);
+      } catch (e) {
+        try {
+          errorDetail = await response.text();
+        } catch (e2) {
+          errorDetail = 'Could not parse error response';
+        }
+      }
+      
+      throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}. Details: ${errorDetail}`);
     }
     
     const tokenData: TokenResponse = await response.json();
