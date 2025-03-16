@@ -10,11 +10,20 @@
  * If downloadId is not provided, a random one will be generated
  */
 
-require('dotenv').config();
-const { put } = require('@vercel/blob');
-const { nanoid } = require('nanoid');
+import('dotenv').then(dotenv => dotenv.config());
+import('@vercel/blob').then(({ put }) => {
+  import('nanoid').then(({ nanoid }) => {
+    main(nanoid, put).catch(err => {
+      console.error('Script error:', err);
+      process.exit(1);
+    });
+  });
+});
 
-async function main() {
+/**
+ * Main function that orchestrates the test data creation
+ */
+async function main(nanoid, put) {
   try {
     console.log('Creating test data in Vercel Blob storage...');
     
@@ -34,10 +43,10 @@ async function main() {
     console.log(`Using payment reference: ${reference}`);
     
     // Create a test download mapping
-    await createDownloadMapping(downloadId, reference);
+    await createDownloadMapping(downloadId, reference, put);
     
     // Create a test donation record
-    await createDonationRecord(reference, downloadId);
+    await createDonationRecord(reference, downloadId, put);
     
     console.log('\n✅ Test data created successfully!');
     console.log('\nTo test the download:');
@@ -53,7 +62,7 @@ async function main() {
 /**
  * Creates a test download mapping in Vercel Blob storage
  */
-async function createDownloadMapping(downloadId, reference) {
+async function createDownloadMapping(downloadId, reference, put) {
   console.log('\nCreating download mapping...');
   
   // Create expiration date (7 days from now)
@@ -77,7 +86,7 @@ async function createDownloadMapping(downloadId, reference) {
   // Upload to Vercel Blob
   const blob = await put(blobName, jsonData, {
     contentType: 'application/json',
-    access: 'private',
+    access: 'public',
   });
   
   console.log(`✅ Download mapping created at: ${blob.url}`);
@@ -87,7 +96,7 @@ async function createDownloadMapping(downloadId, reference) {
 /**
  * Creates a test donation record in Vercel Blob storage
  */
-async function createDonationRecord(reference, downloadId) {
+async function createDonationRecord(reference, downloadId, put) {
   console.log('\nCreating donation record...');
   
   // Create donation record object
@@ -114,13 +123,13 @@ async function createDonationRecord(reference, downloadId) {
   // Upload to Vercel Blob
   const blob = await put(blobName, jsonData, {
     contentType: 'application/json',
-    access: 'private',
+    access: 'public',
   });
   
   console.log(`✅ Donation record created at: ${blob.url}`);
   
   // Update donation index
-  await updateDonationIndex(donation);
+  await updateDonationIndex(donation, put);
   
   return blob;
 }
@@ -128,7 +137,7 @@ async function createDonationRecord(reference, downloadId) {
 /**
  * Updates the donation index with the new donation
  */
-async function updateDonationIndex(donation) {
+async function updateDonationIndex(donation, put) {
   console.log('\nUpdating donation index...');
   
   let donationIndex = { donations: [] };
@@ -172,7 +181,7 @@ async function updateDonationIndex(donation) {
     // Upload to Vercel Blob
     const blob = await put('donations/index.json', jsonData, {
       contentType: 'application/json',
-      access: 'private',
+      access: 'public',
     });
     
     console.log(`✅ Donation index updated at: ${blob.url}`);
@@ -182,6 +191,3 @@ async function updateDonationIndex(donation) {
     console.log('Continuing without updating index');
   }
 }
-
-// Run the script
-main();
