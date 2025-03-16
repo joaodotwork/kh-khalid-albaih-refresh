@@ -18,15 +18,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!phoneNumber || phoneNumber.length !== 8) {
+    // Validate phone number format (must be 10-15 digits including country code)
+    // Norwegian phone numbers are 8 digits plus country code (47), so 10 digits total
+    if (!phoneNumber || phoneNumber.length < 8) {
       return NextResponse.json(
         { error: 'Invalid phone number provided' },
         { status: 400 }
       );
     }
+    
+    // Format phone number with country code if needed
+    // If it already has country code (e.g. 47xxxxxxxx), use as is
+    // Otherwise, add Norwegian country code (47)
+    const formattedPhoneNumber = phoneNumber.length >= 10 
+      ? phoneNumber  // Already has country code
+      : `47${phoneNumber}`; // Add Norwegian country code
+      
+    // Final validation check
+    if (!/^\d{10,15}$/.test(formattedPhoneNumber)) {
+      return NextResponse.json(
+        { error: 'Phone number must be 10-15 digits including country code' },
+        { status: 400 }
+      );
+    }
 
-    // Generate a unique order reference
-    const orderReference = nanoid();
+    // Generate a unique order reference that matches Vipps requirements
+    // Must match regex ^[a-zA-Z0-9-]{8,64}$ (alphanumeric and hyphens, 8-64 chars)
+    // nanoid() can include underscore which is not allowed, so we'll replace it with hyphen
+    const orderReference = nanoid().replace(/_/g, '-');
 
     // Create the Vipps ePayment request
     // Documentation: https://developer.vippsmobilepay.com/docs/APIs/ecom-api/
@@ -51,9 +70,9 @@ export async function POST(request: NextRequest) {
         value: amountInOre
       },
       
-      // Set customer information
+      // Set customer information with properly formatted phone number
       customer: {
-        phoneNumber: phoneNumber,
+        phoneNumber: formattedPhoneNumber,
       },
       
       // Set payment description that will appear in the app
@@ -99,9 +118,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Check and format access token correctly with Bearer prefix
-    const formattedToken = accessToken.startsWith('Bearer ') 
-      ? accessToken 
-      : `Bearer ${accessToken}`;
+    // Make sure there's exactly one "Bearer " prefix
+    let formattedToken = accessToken.trim();
+    if (formattedToken.startsWith('Bearer ')) {
+      // Token already has prefix, use as is
+      formattedToken = formattedToken;
+    } else {
+      // Add prefix
+      formattedToken = `Bearer ${formattedToken}`;
+    }
+    
+    // Log token format for debugging (safely)
+    console.log(`Token format check: ${formattedToken.substring(0, 13)}...`);
+
+    // Generate an idempotency key to prevent duplicate payments
+    // We'll use the order reference + a timestamp
+    const idempotencyKey = `${orderReference}_${Date.now()}`;
 
     // Log headers for debugging (remove in production)
     console.log('Request headers:', {
@@ -109,8 +141,19 @@ export async function POST(request: NextRequest) {
       'Authorization': `${formattedToken.substring(0, 15)}...`, // Log only beginning for security
       'Ocp-Apim-Subscription-Key': `${subscriptionKey.substring(0, 5)}...`, // Log only beginning for security
       'Merchant-Serial-Number': merchantSerialNumber,
+      'Idempotency-Key': idempotencyKey,
     });
-
+    
+    // Log request payload for debugging (remove in production)
+    console.log('Request payload:', {
+      reference: payload.reference,
+      reference_length: payload.reference.length,
+      reference_format: payload.reference.match(/^[a-zA-Z0-9-]{8,64}$/) ? 'valid' : 'invalid',
+      amount: payload.amount,
+      phoneNumber: formattedPhoneNumber,
+      returnUrl: payload.returnUrl,
+    });
+    
     // Make the API request to Vipps ePayment API
     const vippsResponse = await fetch('https://apitest.vipps.no/epayment/v1/payments', {
       method: 'POST',
@@ -123,6 +166,7 @@ export async function POST(request: NextRequest) {
         'Vipps-System-Version': '1.0.0',
         'Vipps-System-Plugin-Name': 'nextjs-app',
         'Vipps-System-Plugin-Version': '1.0.0',
+        'Idempotency-Key': idempotencyKey, // Required header to prevent duplicate payments
       },
       body: JSON.stringify(payload),
     });
@@ -177,6 +221,24 @@ export async function POST(request: NextRequest) {
     // Parse the successful response
     const vippsData = await vippsResponse.json();
 
+    // Log the full Vipps response for debugging
+    console.log('Vipps API success response:', {
+      redirectUrl: vippsData.redirectUrl ? `${vippsData.redirectUrl.substring(0, 70)}...` : 'Missing',
+      reference: vippsData.reference,
+      // Other fields if needed
+    });
+    
+    // Also write to debug file for easier inspection
+    try {
+      const fs = require('fs');
+      fs.writeFileSync(
+        '/Users/joao/Dev/kh-khalid-albaih/app/debug-payment.txt', 
+        JSON.stringify(vippsData, null, 2)
+      );
+    } catch (err) {
+      console.error('Error writing debug file:', err);
+    }
+
     // Store payment initiation details in database or blob storage
     // For a real implementation, this would save to a database
     console.log('Payment initiated:', {
@@ -187,9 +249,10 @@ export async function POST(request: NextRequest) {
     });
 
     // Return the URL where the user should be redirected to complete payment
+    // Vipps ePayment API returns the redirect URL as 'redirectUrl' property
     return NextResponse.json({
       success: true,
-      redirectUrl: vippsData.url,
+      redirectUrl: vippsData.redirectUrl, // Changed from vippsData.url to vippsData.redirectUrl
       orderReference,
     });
   } catch (error) {

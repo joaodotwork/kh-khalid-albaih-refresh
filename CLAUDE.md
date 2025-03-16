@@ -8,6 +8,8 @@
 - **Start production server**: `npm run start`
 - **Run linting**: `npm run lint`
 - **Run type checking**: `npm run typecheck`
+- **Set up tunneling for local Vipps testing**: `node scripts/setup-tunnel.js`
+- **Refresh Vipps token**: `node scripts/refresh-vipps-token.js --update`
 
 ## Project Structure
 
@@ -57,6 +59,20 @@ kh-khalid-albaih/
   3. Whitespace in credentials
   4. Truncated API keys
 
+#### Token Refresh
+
+To refresh your Vipps access token, use the included script:
+
+```bash
+# Show the new token but don't update .env
+node scripts/refresh-vipps-token.js
+
+# Fetch a fresh token and automatically update .env
+node scripts/refresh-vipps-token.js --update
+```
+
+The token is valid for 24 hours in production and 1 hour in the test environment.
+
 #### API Flow
 1. Generate static QR code on the landing page with merchant redirect
 2. User scans QR code with phone camera
@@ -72,6 +88,26 @@ kh-khalid-albaih/
 - Used for storing and serving downloadable files
 - Each download gets a unique URL that expires after use
 - Requires `BLOB_READ_WRITE_TOKEN` environment variable
+
+## Local Development with Vipps
+
+Testing the Vipps integration locally requires a public URL for callbacks. We use ngrok for this:
+
+1. Run the tunnel script: `node scripts/setup-tunnel.js`
+2. The script will start ngrok and update your `.env` with the correct `NEXT_PUBLIC_BASE_URL`
+3. Restart your Next.js dev server to pick up the new URL
+4. Test the complete payment flow
+
+For authentication issues:
+1. Make sure you have a valid access token: `node scripts/refresh-vipps-token.js --update`
+2. Check credential formatting with the `/api/debug-credentials` endpoint
+
+Common issues:
+- Phone number format (must be 10-15 digits with country code)
+- Order reference format (must match regex `^[a-zA-Z0-9-]{8,64}$` - only alphanumeric and hyphens, 8-64 chars)
+- Expired access token (valid for 1 hour in test environment)
+- Missing idempotency key in API requests
+- Missing or incorrect tunneling setup for local development
 
 ## Deployment
 
