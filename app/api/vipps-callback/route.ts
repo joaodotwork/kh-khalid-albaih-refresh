@@ -16,8 +16,8 @@ import crypto from 'crypto';
  * - epayments.payment.created.v1: Payment created
  * - epayments.payment.authorized.v1: Payment authorized
  * - epayments.payment.captured.v1: Payment captured 
- * - epayments.payment.cancelled.v1: Payment cancelled
- * - epayments.payment.failed.v1: Payment failed
+ * 
+ * Note: The naming convention is "epayments" (plural) not "epayment" (singular)
  */
 /**
  * Validates the webhook signature from Vipps
@@ -139,14 +139,18 @@ export async function POST(request: NextRequest) {
       case 'epayments.payment.captured.v1':
         status = 'CAPTURED';
         break;
+      // The following may use different event names but we'll keep the handler for them
       case 'epayments.payment.cancelled.v1':
+      case 'payment.cancelled.v1': 
         status = 'CANCELLED';
         break;
       case 'epayments.payment.failed.v1':
+      case 'payment.failed.v1':
         status = 'FAILED';
         break;
       default:
         status = 'UNKNOWN';
+        console.log(`Unhandled event type: ${eventType}`);
     }
     
     // Extract amount information if available

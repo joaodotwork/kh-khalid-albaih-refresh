@@ -55,13 +55,11 @@ const API_ENDPOINT = isTestMode
 // Webhook callback URL - this is the endpoint Vipps will call with payment events
 const WEBHOOK_URL = `${BASE_URL}/api/vipps-callback`;
 
-// Payment events to subscribe to
+// Payment events to try - we'll use only one for testing
+// Let's test with one event first to identify the correct format
 const PAYMENT_EVENTS = [
-  'epayments.payment.created.v1',        // Payment created
-  'epayments.payment.authorized.v1',     // Payment authorized
-  'epayments.payment.captured.v1',       // Payment captured
-  'epayments.payment.cancelled.v1',      // Payment cancelled
-  'epayments.payment.failed.v1'          // Payment failed
+  // Try just this one event to see if it works
+  'epayments.payment.created.v1'       // Correct event format as per documentation
 ];
 
 /**
