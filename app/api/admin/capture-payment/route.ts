@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { list, put } from '@vercel/blob';
+import { withValidVippsToken } from '../../lib/vipps-auth';
+
+// Wrap the handler function with the token middleware
+export const POST = (request: NextRequest) => withValidVippsToken(request, handlePost);
 
 /**
  * POST handler for capturing a payment
  * This endpoint captures a previously authorized payment in Vipps
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     const { reference } = await request.json();
     

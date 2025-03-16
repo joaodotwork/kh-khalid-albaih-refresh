@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withValidVippsToken } from '../lib/vipps-auth';
 import { nanoid } from 'nanoid';
+
+// Wrap the handler function with the token middleware
+export const POST = (request: NextRequest) => withValidVippsToken(request, handlePost);
 
 /**
  * API route to initiate a Vipps payment
  * This handles the payment initiation step in the Vipps ePayment flow
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     // Parse request data
     const { amount, phoneNumber } = await request.json();

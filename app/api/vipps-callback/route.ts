@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { put, list } from '@vercel/blob';
+import { getValidAccessToken } from '../lib/vipps-auth';
 
 /**
  * This endpoint handles callbacks from Vipps regarding payment status
@@ -141,11 +142,8 @@ export async function POST(request: NextRequest) {
  * @param paymentData The payment data from Vipps
  */
 async function capturePayment(reference: string, paymentData: any) {
-  // 1. Get the access token from environment variable
-  const accessToken = process.env.VIPPS_ACCESS_TOKEN;
-  if (!accessToken) {
-    throw new Error('VIPPS_ACCESS_TOKEN is not set');
-  }
+  // 1. Get a fresh access token
+  const accessToken = await getValidAccessToken();
   
   // 2. Make the capture API request to Vipps
   const captureUrl = `https://api.vipps.no/epayment/v1/payments/${reference}/capture`;

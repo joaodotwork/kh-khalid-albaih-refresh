@@ -62,9 +62,15 @@ kh-khalid-albaih/
   3. Whitespace in credentials
   4. Truncated API keys
 
-#### Token Refresh
+#### Token Management
 
-To refresh your Vipps access token, use the included script:
+The application includes an automatic token management system that handles token refreshes for you:
+
+1. **Automatic Refresh**: Tokens are automatically refreshed before API calls when they're about to expire
+2. **In-Memory Caching**: Tokens are cached in memory to avoid unnecessary refresh calls
+3. **Middleware**: All Vipps API endpoints use the token middleware to ensure valid tokens
+
+You can manually refresh the token when needed:
 
 ```bash
 # Show the new token but don't update .env
@@ -72,7 +78,15 @@ node scripts/refresh-vipps-token.js
 
 # Fetch a fresh token and automatically update .env
 node scripts/refresh-vipps-token.js --update
+
+# Or use the API endpoint (requires ADMIN_SECRET)
+curl -X POST https://your-domain.com/api/refresh-token \
+  -H "Authorization: Bearer your-admin-secret"
 ```
+
+**For Production Deployment**:
+- Set up a cron job or scheduled task to call `/api/refresh-token` every 12 hours with your ADMIN_SECRET
+- For Vercel deployments, use a service like Uptime Robot or GitHub Actions to periodically call the endpoint
 
 The token is valid for 24 hours in production and 1 hour in the test environment.
 
