@@ -90,28 +90,50 @@ export async function POST(request: NextRequest) {
       console.warn('Webhook secret or signature missing, skipping signature validation');
     }
     
-    // Extract the event type and payment information from the webhook data
-    const eventType = webhookData.eventName;
-    const eventId = webhookData.eventId;
-    const timestamp = webhookData.timestamp;
+    // Check if this is the standard webhook format (with eventName) or the direct webhook format
+    let eventType, eventId, timestamp, paymentData, reference;
     
-    console.log(`Processing webhook event: ${eventType} (ID: ${eventId})`);
-    
-    // Extract payment information from the webhook data
-    // The structure depends on the event type
-    const paymentData = webhookData.data;
-    
-    if (!paymentData) {
-      console.error('No payment data in webhook');
+    if (webhookData.eventName) {
+      // Standard webhook format (with eventName, eventId, data properties)
+      eventType = webhookData.eventName;
+      eventId = webhookData.eventId;
+      timestamp = webhookData.timestamp;
+      
+      console.log(`Processing standard webhook event: ${eventType} (ID: ${eventId})`);
+      
+      // Extract payment information from the webhook data (data property)
+      paymentData = webhookData.data;
+      
+      if (!paymentData) {
+        console.error('No payment data in standard webhook format');
+        return NextResponse.json(
+          { error: 'No payment data in webhook' },
+          { status: 400 }
+        );
+      }
+      
+      // Extract payment reference which can vary by event type
+      reference = paymentData.reference || paymentData.orderId || '';
+    } else if (webhookData.reference) {
+      // Direct webhook format (properties at the root level)
+      // Map the event name based on the 'name' property
+      const eventName = webhookData.name;
+      eventType = `epayments.payment.${eventName.toLowerCase()}.v1`;
+      eventId = webhookData.pspReference;
+      timestamp = webhookData.timestamp;
+      
+      console.log(`Processing direct webhook format with status: ${eventName}`);
+      
+      // Use the webhook data directly as payment data
+      paymentData = webhookData;
+      reference = webhookData.reference;
+    } else {
+      console.error('Unrecognized webhook format');
       return NextResponse.json(
-        { error: 'No payment data in webhook' },
+        { error: 'Unrecognized webhook format' },
         { status: 400 }
       );
     }
-    
-    // Extract payment details which can vary by event type
-    // The reference is the order reference we generated
-    const reference = paymentData.reference || paymentData.orderId || '';
     
     if (!reference) {
       console.error('Missing payment reference in webhook data');
@@ -129,32 +151,38 @@ export async function POST(request: NextRequest) {
     let userInfo;
     
     // Map the event type to a payment status
-    switch (eventType) {
-      case 'epayments.payment.created.v1':
-        status = 'CREATED';
-        break;
-      case 'epayments.payment.authorized.v1':
-        status = 'AUTHORIZED';
-        break;
-      case 'epayments.payment.captured.v1':
-        status = 'CAPTURED';
-        break;
-      // The following may use different event names but we'll keep the handler for them
-      case 'epayments.payment.cancelled.v1':
-      case 'payment.cancelled.v1': 
-        status = 'CANCELLED';
-        break;
-      case 'epayments.payment.failed.v1':
-      case 'payment.failed.v1':
-        status = 'FAILED';
-        break;
-      default:
-        status = 'UNKNOWN';
-        console.log(`Unhandled event type: ${eventType}`);
+    // Handle both standard webhook format and direct format
+    if (webhookData.name) {
+      // Direct webhook format already has a status in the 'name' field
+      status = webhookData.name;
+    } else {
+      // Standard webhook format - extract from event type
+      switch (eventType) {
+        case 'epayments.payment.created.v1':
+          status = 'CREATED';
+          break;
+        case 'epayments.payment.authorized.v1':
+          status = 'AUTHORIZED';
+          break;
+        case 'epayments.payment.captured.v1':
+          status = 'CAPTURED';
+          break;
+        case 'epayments.payment.cancelled.v1':
+        case 'payment.cancelled.v1': 
+          status = 'CANCELLED';
+          break;
+        case 'epayments.payment.failed.v1':
+        case 'payment.failed.v1':
+          status = 'FAILED';
+          break;
+        default:
+          status = 'UNKNOWN';
+          console.log(`Unhandled event type: ${eventType}`);
+      }
     }
     
     // Extract amount information if available
-    // The structure can be different based on the event type
+    // The structure can be different based on the event type and format
     if (paymentData.amount) {
       amount = {
         value: paymentData.amount.value || 0,
