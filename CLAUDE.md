@@ -37,19 +37,36 @@ kh-khalid-albaih/
 
 ## API Integration
 
-### Vipps QR API
-- Endpoint: https://developer.vippsmobilepay.com/docs/APIs/qr-api/qr-api-guide/
+### Vipps API Integration
+- Comprehensive integration documentation: See `VIPPS_INTEGRATION_REFERENCE.md`
 - Authentication: Client ID, Client Secret, Subscription Key
-- Authentication Token: Store the access token as `VIPPS_ACCESS_TOKEN` environment variable
-- Required Headers for Production:
-  - `Authorization: Bearer ${VIPPS_ACCESS_TOKEN}`
-  - Include all Vipps-System headers for debugging purposes
-- API flow:
-  1. Generate static QR code on the landing page
-  2. User scans QR code with Vipps app
-  3. Vipps calls our callback endpoint with reference ID
-  4. Our server generates a unique download link with nanoid
-  5. User is redirected to the download page
+- ePayment API: https://developer.vippsmobilepay.com/docs/APIs/epayment-api/
+- UserInfo API: https://developer.vippsmobilepay.com/docs/APIs/userinfo-api/
+- Access Token: **IMPORTANT** - Store as `VIPPS_ACCESS_TOKEN` with `Bearer ` prefix included
+- API Keys Configuration:
+  - Subscription Key: Must match the environment (test/prod)
+  - Client IDs/Secrets: Must be complete with no trailing/leading spaces
+  - Merchant Serial Number: Must match the MSN associated with your keys
+
+#### Authentication Troubleshooting
+- Use `/api/debug-credentials` endpoint for checking credential formatting (dev only)
+- Use `/api/refresh-token` endpoint for obtaining a new access token
+- Common 401 errors are caused by:
+  1. Missing `Bearer` prefix in Authorization header
+  2. Expired access tokens (valid for 24 hours)
+  3. Whitespace in credentials
+  4. Truncated API keys
+
+#### API Flow
+1. Generate static QR code on the landing page with merchant redirect
+2. User scans QR code with phone camera
+3. User is redirected to donation page
+4. User selects amount and enters phone number
+5. Vipps ePayment API is called with profile scope
+6. User completes payment in Vipps app and grants profile access
+7. Vipps sends callback with payment confirmation and profile data
+8. System creates download link and stores donation data
+9. User is redirected to download page
 
 ### Vercel Blob Storage
 - Used for storing and serving downloadable files

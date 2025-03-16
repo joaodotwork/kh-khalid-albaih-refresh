@@ -27,13 +27,68 @@ The complete donation flow consists of these steps:
 
 ## Vipps Payment Process
 
-### Vipps Configuration
+### Vipps API Authentication
 
-- **Auto-Capture**: Enable auto-capture for all payments
-- **Capture Window**: Configure the capture window (typically 7 days)
-- **Scopes**: Request scopes for user data and consent collection
+Authentication with the Vipps API requires careful attention to formatting and proper credentials. There are several key components:
 
-### Payment Initiation
+1. **Access Token**: 
+   - Must be formatted with `Bearer` prefix: `Bearer eyJhbGci...`
+   - Has a limited validity period (typically 24 hours)
+   - Must be refreshed when expired
+
+2. **Subscription Key**:
+   - Must be included in all API requests as `Ocp-Apim-Subscription-Key` header
+   - Specific to the environment (test vs. production)
+   - Must match the key used for obtaining the access token
+
+3. **Merchant Serial Number (MSN)**:
+   - Must be included in the API request headers
+   - Must match the MSN associated with your subscription key
+
+#### Token Management
+
+```typescript
+// Function to refresh the Vipps access token
+async function refreshVippsToken() {
+  const clientId = process.env.VIPPS_CLIENT_ID;
+  const clientSecret = process.env.VIPPS_CLIENT_SECRET;
+  const subscriptionKey = process.env.VIPPS_SUBSCRIPTION_KEY;
+  
+  // Base64 encode credentials
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  
+  const response = await fetch('https://apitest.vipps.no/accesstoken/get', {
+    method: 'POST',
+    headers: {
+      'client_id': clientId,
+      'client_secret': clientSecret,
+      'Ocp-Apim-Subscription-Key': subscriptionKey,
+      'Authorization': `Basic ${credentials}`,
+    },
+  });
+  
+  const data = await response.json();
+  return `Bearer ${data.access_token}`;
+}
+```
+
+#### Header Formatting Best Practices
+
+Always ensure your headers match exactly what Vipps expects:
+
+```typescript
+// Correct header formatting for Vipps API requests
+const headers = {
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${accessToken}`, // Include "Bearer " prefix!
+  'Ocp-Apim-Subscription-Key': subscriptionKey,
+  'Merchant-Serial-Number': merchantSerialNumber,
+};
+```
+
+### Payment Initiation with Profile Sharing
+
+The ePayment API allows requesting profile information from users during payment:
 
 ```typescript
 // Example payment initiation code
@@ -50,49 +105,96 @@ async function initiateVippsPayment(amount: number, phoneNumber: string) {
     }),
   });
   
-  return await response.json();
+  const data = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(data.error || 'Payment initiation failed');
+  }
+  
+  return data;
 }
 ```
 
 ### API Route Implementation
 
 ```typescript
-// Example API route in /api/initiate-vipps-payment/route.ts
-import { NextResponse } from 'next/server';
-import { nanoid } from 'nanoid';
-
-export async function POST(request: Request) {
-  const { amount, phoneNumber, reference } = await request.json();
+// Modern ePayment API implementation
+export async function POST(request: NextRequest) {
+  const { amount, phoneNumber } = await request.json();
   
-  // Vipps API call details
-  const vippsPaymentRequest = {
-    merchantInfo: {
-      merchantSerialNumber: process.env.VIPPS_MERCHANT_SERIAL_NUMBER,
-      callbackPrefix: `${process.env.NEXT_PUBLIC_BASE_URL}/api/vipps-callback`,
-      paymentType: "eComm Regular Payment",
-      orderid: reference,
-      consentRemovalPrefix: `${process.env.NEXT_PUBLIC_BASE_URL}/api/consent-removal`,
+  // Generate a unique reference
+  const reference = nanoid();
+  
+  // Convert amount to øre (smallest monetary unit in NOK)
+  const amountInOre = Math.round(Number(amount) * 100);
+  
+  // Get and format credentials
+  const subscriptionKey = process.env.VIPPS_SUBSCRIPTION_KEY;
+  const accessToken = process.env.VIPPS_ACCESS_TOKEN;
+  const msn = process.env.VIPPS_MERCHANT_SERIAL_NUMBER;
+  
+  // Ensure Bearer prefix
+  const formattedToken = accessToken.startsWith('Bearer ') 
+    ? accessToken 
+    : `Bearer ${accessToken}`;
+  
+  // Construct ePayment API request payload
+  const payload = {
+    // Set merchant reference
+    reference,
+    
+    // Amount details
+    amount: {
+      currency: "NOK",
+      value: amountInOre
     },
-    customerInfo: {
-      mobileNumber: phoneNumber,
+    
+    // Customer details
+    customer: {
+      phoneNumber,
     },
-    transaction: {
-      orderId: reference,
-      amount: amount * 100, // Amount in lowest monetary unit (øre)
-      transactionText: "Donation to Khalid Albaih",
-      skipLandingPage: false, // Set to true to skip Vipps landing page
+    
+    // Return URL after payment
+    returnUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/download/${reference}`,
+    
+    // Payment description
+    paymentDescription: `Donation to Khalid Albaih`,
+    
+    // Request profile information
+    profile: {
+      scope: "name phoneNumber email" // Request user consent to share data
     },
-    consentRemovalPrefixUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/consent-removal`,
+    
+    // Payment method configuration
+    paymentMethod: {
+      type: "WALLET"
+    },
+    
+    // Set userFlow for browser redirect
     userFlow: "WEB_REDIRECT",
   };
   
-  // Call Vipps API to initiate payment
-  // Store payment reference in database
+  // Make API request
+  const response = await fetch('https://apitest.vipps.no/epayment/v1/payments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': formattedToken,
+      'Ocp-Apim-Subscription-Key': subscriptionKey,
+      'Merchant-Serial-Number': msn,
+      'Vipps-System-Name': 'kh-khalid-albaih',
+      'Vipps-System-Version': '1.0.0',
+    },
+    body: JSON.stringify(payload),
+  });
   
-  return NextResponse.json({ 
-    success: true, 
-    redirectUrl: vippsRedirectUrl,
-    reference: reference 
+  // Process response
+  const data = await response.json();
+  
+  return NextResponse.json({
+    success: response.ok,
+    redirectUrl: data.url,
+    reference
   });
 }
 ```
@@ -409,15 +511,37 @@ function verifyWebhookSignature(request) {
 
 Required environment variables:
 ```
+# Vipps API Authentication
 VIPPS_MERCHANT_SERIAL_NUMBER=your-merchant-serial-number
 VIPPS_SUBSCRIPTION_KEY=your-subscription-key
 VIPPS_CLIENT_ID=your-client-id
 VIPPS_CLIENT_SECRET=your-client-secret
-VIPPS_ACCESS_TOKEN=your-access-token
+VIPPS_ACCESS_TOKEN=Bearer your-access-token-without-spaces  # Include 'Bearer ' prefix!
+
+# Application Configuration
 NEXT_PUBLIC_BASE_URL=https://your-production-domain.com
 BLOB_READ_WRITE_TOKEN=your-blob-token
 ADMIN_PASSWORD=secure-password-for-admin-access
+ADMIN_SECRET=secret-for-admin-apis
 ```
+
+### Common Authentication Issues
+
+1. **401 Unauthorized Errors**:
+   - Missing `Bearer` prefix in the access token
+   - Expired access token (typically valid for 24 hours)
+   - Whitespace in token or credentials
+   - Truncated credentials (missing characters at the end)
+   - Using test credentials in production environment or vice versa
+
+2. **Debug Endpoints**:
+   - Use `/api/debug-credentials` in development to check credential formatting
+   - Use `/api/refresh-token` to obtain a new access token when expired
+
+3. **Token Refresh Process**:
+   - Tokens expire after 24 hours and should be refreshed
+   - Store the expiration time and refresh automatically before making API calls
+   - Use Basic authentication with client ID and secret for token refresh
 
 ## Implementation Checklist
 
