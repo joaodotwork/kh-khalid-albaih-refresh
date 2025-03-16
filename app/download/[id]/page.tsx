@@ -9,15 +9,23 @@ const validateDownloadId = async (id: string) => {
   return true;
 };
 
-export default async function DownloadPage({ params }: { params: { id: string } }) {
-  const isValid = await validateDownloadId(params.id);
+/**
+ * Download page component
+ * @param {Object} props - Page props
+ * @param {Object} props.params - URL parameters
+ * @param {string} props.params.id - Download ID
+ */
+export default async function DownloadPage(props) {
+  const id = props.params?.id;
+  
+  const isValid = await validateDownloadId(id);
   
   if (!isValid) {
     notFound();
   }
   
   // In a real implementation, this would come from Vercel Blob storage or another storage solution
-  const downloadUrl = `/api/download/${params.id}`;
+  const downloadUrl = `/api/download/${id}`;
   
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50">

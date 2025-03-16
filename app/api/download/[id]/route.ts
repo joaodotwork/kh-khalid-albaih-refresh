@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { get } from '@vercel/blob';
 
 // In a real implementation, this would be a database table or collection
 const downloadMap: Record<string, string> = {
@@ -8,12 +7,17 @@ const downloadMap: Record<string, string> = {
   'example-id': 'example-blob-url',
 };
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+// Use JSDoc to document the params instead of TypeScript interface
+/**
+ * GET handler for download API route
+ * @param {Request} request - The request object
+ * @param {Object} context - The route context
+ * @param {Object} context.params - The route parameters
+ * @param {string} context.params.id - The download ID
+ */
+export async function GET(request, context) {
   try {
-    const id = params.id;
+    const id = context.params?.id;
     
     // Validate the download ID
     // In a real implementation, this would check a database
