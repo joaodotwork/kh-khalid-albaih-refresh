@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// @ts-check
+// Above line allows type checking in JavaScript files
+
+// This script uses ES modules
+// You need to run it with: node --experimental-modules scripts/register-vipps-webhook.js
 
 /**
  * Script to register webhooks with Vipps Webhooks API
@@ -6,14 +11,16 @@
  * Usage:
  * node scripts/register-vipps-webhook.js
  * 
+ * If you get ESM errors, run with:
+ * node --experimental-modules scripts/register-vipps-webhook.js
+ * 
  * This will register your callback URL with Vipps to receive payment events.
  * Make sure your environment variables are properly set before running.
  */
 
 // Load environment variables from .env file
-require('dotenv').config();
-
-const fetch = require('node-fetch');
+import 'dotenv/config';
+import fetch from 'node-fetch';
 
 // Configuration from environment variables
 const VIPPS_SUBSCRIPTION_KEY = process.env.VIPPS_SUBSCRIPTION_KEY;

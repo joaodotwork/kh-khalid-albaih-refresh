@@ -137,7 +137,7 @@ This project uses Vipps Webhooks API for payment notifications. To register webh
 
 2. Register your webhook:
    ```bash
-   node scripts/register-vipps-webhook.js
+   node --experimental-modules scripts/register-vipps-webhook.js
    ```
 
 3. Store the webhook secret provided in the response:
@@ -147,7 +147,7 @@ This project uses Vipps Webhooks API for payment notifications. To register webh
 
 4. To list your registered webhooks:
    ```bash
-   node scripts/register-vipps-webhook.js list
+   node --experimental-modules scripts/register-vipps-webhook.js list
    ```
 
 ## Troubleshooting Downloads

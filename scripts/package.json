@@ -1,0 +1,7 @@
+{
+  "name": "vipps-webhook-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Scripts for Vipps webhook registration",
+  "private": true
+}

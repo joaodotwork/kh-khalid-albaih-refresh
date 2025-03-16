@@ -13,8 +13,8 @@
 - **Upload sample artwork file**: `node scripts/upload-sample-artwork.js`
 - **Create test data for downloads**: `node scripts/create-test-data.js [downloadId]`
 - **Create missing download mapping**: `node scripts/create-missing-download.js <orderReference> [downloadId]`
-- **Register Vipps webhooks**: `node scripts/register-vipps-webhook.js`
-- **List registered Vipps webhooks**: `node scripts/register-vipps-webhook.js list`
+- **Register Vipps webhooks**: `node --experimental-modules scripts/register-vipps-webhook.js`
+- **List registered Vipps webhooks**: `node --experimental-modules scripts/register-vipps-webhook.js list`
 - **Rebuild donation index**: `node scripts/rebuild-donation-index.js`
 
 ## Project Structure
