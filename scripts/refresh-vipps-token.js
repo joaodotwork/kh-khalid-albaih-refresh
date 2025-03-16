@@ -5,15 +5,20 @@
  * It can also be used to update the .env file directly by adding --update flag
  * 
  * Usage:
- *   node scripts/refresh-vipps-token.js
- *   node scripts/refresh-vipps-token.js --update
+ *   node --experimental-modules scripts/refresh-vipps-token.js
+ *   node --experimental-modules scripts/refresh-vipps-token.js --update
  */
 
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
+import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 // We'll use native fetch since it's available in newer Node versions
 // If not available, fallback will be handled
+
+// Get current filename and directory in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function refreshVippsToken(updateEnv = false) {
   // Ensure we have fetch available

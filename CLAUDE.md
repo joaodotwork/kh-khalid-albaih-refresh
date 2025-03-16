@@ -9,7 +9,7 @@
 - **Run linting**: `npm run lint`
 - **Run type checking**: `npm run typecheck`
 - **Set up tunneling for local Vipps testing**: `node scripts/setup-tunnel.js`
-- **Refresh Vipps token**: `node scripts/refresh-vipps-token.js --update`
+- **Refresh Vipps token**: `node --experimental-modules scripts/refresh-vipps-token.js --update`
 - **Upload sample artwork file**: `node scripts/upload-sample-artwork.js`
 - **Create test data for downloads**: `node scripts/create-test-data.js [downloadId]`
 - **Create missing download mapping**: `node scripts/create-missing-download.js <orderReference> [downloadId]`
