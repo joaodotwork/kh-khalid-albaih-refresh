@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { put } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 
 /**
  * This endpoint handles callbacks from Vipps regarding payment status
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         reference,
         amount: amount.value / 100, // Convert from øre to NOK
         currency: amount.currency,
-        status,
+        status: callbackData.status, // Make sure we use the potentially updated status after auto-capture
         timestamp: new Date().toISOString(),
         userProfile: {
           name: userProfile.name || null,
@@ -189,22 +189,33 @@ async function capturePayment(reference: string, paymentData: any) {
  */
 async function updateDonationIndex(donationRecord) {
   try {
-    // Attempt to get existing index
+    // Attempt to get existing index directly from blob storage
     let donationIndex;
-    try {
-      const indexResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/api/admin/donation-index`,
-        { method: 'GET' }
-      );
+    
+    // First, list all blobs to find the index file
+    const { blobs } = await list({ prefix: 'donations/' });
+    const indexBlob = blobs.find(b => b.pathname === 'donations/index.json');
+    
+    if (indexBlob) {
+      // If the index exists, get its content
+      console.log(`Found existing donation index at ${indexBlob.url}`);
+      const response = await fetch(indexBlob.url);
       
-      if (indexResponse.ok) {
-        donationIndex = await indexResponse.json();
+      if (response.ok) {
+        const text = await response.text();
+        try {
+          donationIndex = JSON.parse(text);
+          console.log('Successfully loaded existing donation index');
+        } catch (parseError) {
+          console.error('Error parsing donation index JSON:', parseError);
+          donationIndex = { donations: [] };
+        }
       } else {
-        // Create new index if it doesn't exist
+        console.log('Failed to fetch existing index, creating new one');
         donationIndex = { donations: [] };
       }
-    } catch (error) {
-      // Create new index if error occurs
+    } else {
+      console.log('Donation index does not exist, creating new one');
       donationIndex = { donations: [] };
     }
     
