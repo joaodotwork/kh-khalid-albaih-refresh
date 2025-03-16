@@ -38,7 +38,45 @@ flowchart TD
 
 ## Getting Started
 
-Instructions for setting up and running the project will go here.
+1. Clone the repository
+   ```bash
+   git clone <repository-url>
+   cd kh-khalid-albair
+   ```
+
+2. Install dependencies
+   ```bash
+   npm install
+   ```
+
+3. Create a `.env` file based on `.env.example`
+   ```bash
+   cp .env.example .env
+   ```
+   
+4. Update the environment variables in `.env` with your Vipps API credentials and Vercel Blob token
+
+5. Run the development server
+   ```bash
+   npm run dev
+   ```
+
+6. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application
+
+### Deployment
+
+1. Push to the `dev` branch for development environments
+   ```bash
+   git checkout dev
+   git push origin dev
+   ```
+
+2. For production deployment, merge changes to the `prod` branch
+   ```bash
+   git checkout prod
+   git merge dev
+   git push origin prod
+   ```
 
 ## License
 
