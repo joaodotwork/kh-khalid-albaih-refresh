@@ -8,24 +8,33 @@
  *   node scripts/upload-sample-artwork.js
  */
 
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const { put } = require('@vercel/blob');
-const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+// Use dynamic imports since pdf-lib is ESM
+import('dotenv').then(dotenv => dotenv.config());
+import('fs').then(fs => {
+  import('path').then(path => {
+    import('@vercel/blob').then(({ put }) => {
+      import('pdf-lib').then(({ PDFDocument, rgb, StandardFonts }) => {
+        main(fs, path, put, { PDFDocument, rgb, StandardFonts }).catch(err => {
+          console.error('Script error:', err);
+          process.exit(1);
+        });
+      });
+    });
+  });
+});
 
-async function main() {
+async function main(fs, path, put, { PDFDocument, rgb, StandardFonts }) {
   try {
     console.log('Creating sample artwork PDF...');
     
     // Create a temporary directory for the sample file
-    const tempDir = path.join(__dirname, '..', 'temp');
+    const tempDir = path.join(process.cwd(), 'temp');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
     
     // Generate a sample PDF file
-    const pdfPath = await createSamplePDF(tempDir);
+    const pdfPath = await createSamplePDF(tempDir, fs, path, { PDFDocument, rgb, StandardFonts });
     
     console.log(`Sample PDF created at: ${pdfPath}`);
     
@@ -65,7 +74,7 @@ async function main() {
 /**
  * Creates a sample PDF file with some text
  */
-async function createSamplePDF(tempDir) {
+async function createSamplePDF(tempDir, fs, path, { PDFDocument, rgb, StandardFonts }) {
   // Create a new PDF document
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([600, 800]);
@@ -135,6 +144,3 @@ async function createSamplePDF(tempDir) {
   
   return filePath;
 }
-
-// Run the script
-main();
