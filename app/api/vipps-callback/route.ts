@@ -244,9 +244,9 @@ export async function POST(request: NextRequest) {
     
     console.log(`Processing payment reference ${reference} with status ${status}`);
     
-    // Check if the payment is successful
-    if (status === 'AUTHORIZED' || status === 'CAPTURED') {
-      console.log(`Payment ${reference} was successful with status ${status}`);
+    // Check for payments in any status that should create a download
+    if (status === 'AUTHORIZED' || status === 'CAPTURED' || status === 'CREATED') {
+      console.log(`Processing payment ${reference} with status ${status}`);
       
       // Auto-capture payment if it's in AUTHORIZED state
       if (status === 'AUTHORIZED') {
@@ -263,9 +263,10 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Generate a unique download ID
-      const downloadId = nanoid();
-      console.log(`Generated download ID ${downloadId} for payment ${reference}`);
+      // If the status is 'CREATED', use the reference as the download ID
+      // For other statuses, generate a unique download ID
+      const downloadId = status === 'CREATED' ? reference : nanoid();
+      console.log(`Using download ID ${downloadId} for payment ${reference}`);
       
       // Extract user information if available
       const userProfile = userInfo || {};
