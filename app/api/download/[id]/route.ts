@@ -47,7 +47,8 @@ export async function GET(
     }
     
     // Step 3: Check payment status
-    if (donation.status !== 'AUTHORIZED' && donation.status !== 'CAPTURED') {
+    // Allow downloads for CREATED, AUTHORIZED, and CAPTURED statuses
+    if (donation.status !== 'AUTHORIZED' && donation.status !== 'CAPTURED' && donation.status !== 'CREATED') {
       console.log(`Payment not completed for download ID: ${id}, status: ${donation.status}`);
       return NextResponse.json(
         { error: 'Payment not completed' },
