@@ -25,7 +25,7 @@ export default function Home() {
           
           <div className="bg-gray-100 p-6 rounded-lg flex justify-center mb-6">
             <Suspense fallback={<div className="w-64 h-64 bg-gray-200 animate-pulse"></div>}>
-              <ClientQRCode callbackUrl={callbackUrl} />
+              <ClientQRCode />
             </Suspense>
           </div>
           

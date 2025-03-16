@@ -40,6 +40,10 @@ kh-khalid-albaih/
 ### Vipps QR API
 - Endpoint: https://developer.vippsmobilepay.com/docs/APIs/qr-api/qr-api-guide/
 - Authentication: Client ID, Client Secret, Subscription Key
+- Authentication Token: Store the access token as `VIPPS_ACCESS_TOKEN` environment variable
+- Required Headers for Production:
+  - `Authorization: Bearer ${VIPPS_ACCESS_TOKEN}`
+  - Include all Vipps-System headers for debugging purposes
 - API flow:
   1. Generate static QR code on the landing page
   2. User scans QR code with Vipps app
