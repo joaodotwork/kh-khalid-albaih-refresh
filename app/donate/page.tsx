@@ -11,6 +11,52 @@ const presetAmounts = [
   { id: 'large', amount: 1000, label: 'NOK 1000' },
 ];
 
+// VippsButton component to handle the custom element
+const VippsButton = (props: {
+  onClick?: () => void,
+  type?: string,
+  brand?: string,
+  language?: string,
+  variant?: string,
+  rounded?: string,
+  verb?: string,
+  stretched?: string,
+  branded?: string,
+  loading?: string
+}) => {
+  useEffect(() => {
+    // Ensure the script has loaded before rendering the component
+    const script = document.querySelector('script[src="https://checkout.vipps.no/checkout-button/v1/vipps-checkout-button.js"]');
+    if (!script) {
+      const newScript = document.createElement('script');
+      newScript.src = 'https://checkout.vipps.no/checkout-button/v1/vipps-checkout-button.js';
+      newScript.async = true;
+      document.body.appendChild(newScript);
+    }
+  }, []);
+
+  return (
+    <div onClick={props.onClick}>
+      <div 
+        id="vipps-button-container" 
+        dangerouslySetInnerHTML={{
+          __html: `<vipps-mobilepay-button
+            type="${props.type || 'button'}"
+            brand="${props.brand || 'vipps'}"
+            language="${props.language || 'en'}"
+            variant="${props.variant || 'primary'}"
+            rounded="${props.rounded || 'true'}"
+            verb="${props.verb || 'donate'}"
+            stretched="${props.stretched || 'false'}"
+            branded="${props.branded || 'true'}"
+            loading="${props.loading || 'false'}"
+          ></vipps-mobilepay-button>`
+        }}
+      />
+    </div>
+  );
+};
+
 export default function DonatePage() {
   const [showModal, setShowModal] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -123,11 +169,7 @@ export default function DonatePage() {
   
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50">
-      <Script
-        async
-        type="text/javascript"
-        src="https://checkout.vipps.no/checkout-button/v1/vipps-checkout-button.js"
-      />
+      {/* Script moved to VippsButton component */}
       <div className="max-w-lg w-full bg-white rounded-xl shadow-lg overflow-hidden">
         <div className="p-6 sm:p-10">
           <div className="flex items-center justify-center mb-6">
@@ -162,15 +204,18 @@ export default function DonatePage() {
           </div>
           
           <div className="flex justify-center">
-            <button
+            <VippsButton 
               onClick={handleOpenModal}
-              className="px-10 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all duration-200 transform hover:scale-105 hover:shadow-lg flex items-center"
-            >
-              <span className="mr-2">Donate Now</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
+              type="button"
+              brand="vipps"
+              language="en"
+              variant="primary"
+              rounded="true"
+              verb="donate"
+              stretched="false"
+              branded="true"
+              loading="false"
+            />
           </div>
         </div>
       </div>
@@ -289,7 +334,7 @@ export default function DonatePage() {
                   </button>
                 ) : (
                   <div onClick={handleSubmit} className="w-full flex justify-center">
-                    <vipps-mobilepay-button
+                    <VippsButton
                       type="button"
                       brand="vipps"
                       language="en"
@@ -299,7 +344,7 @@ export default function DonatePage() {
                       stretched="false"
                       branded="true"
                       loading="false"
-                    ></vipps-mobilepay-button>
+                    />
                   </div>
                 )}
               </div>
